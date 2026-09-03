@@ -1,0 +1,21 @@
+# Dependências de execução da Ferramenta de Processamento de Notícias.
+# Ajustado a partir do install.txt original: removidos pacotes não
+# utilizados pelo código (numpy, scipy, pandas, matplotlib, sympy,
+# cython, spyder) e adicionado python-dateutil, usado em utils.py mas
+# ausente da lista original.
+
+# Automação de navegador e coleta de páginas
+selenium
+webdriver-manager
+cloudscraper
+
+# Parsing de HTML/XML
+beautifulsoup4
+lxml
+
+# Integração com o LLM local (LM Studio)
+lmstudio
+
+# Reparo de JSON e parsing de datas
+json-repair
+python-dateutil

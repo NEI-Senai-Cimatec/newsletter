@@ -1,0 +1,27 @@
+# Diretórios de dados gerados pelo pipeline (recriados automaticamente
+# por ensure_directories() na primeira execução)
+/cache/
+/article/
+/content/
+/parse/
+
+# Estado de cache e log em tempo de execução
+/cache.json
+/legacy.json
+/console.txt
+
+# Saída de dados do pipeline (regenerada por run.py / merge.py)
+/quantum_articles.json
+/documents-data.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Editor / SO
+.DS_Store
+.spyproject/
+.vscode/

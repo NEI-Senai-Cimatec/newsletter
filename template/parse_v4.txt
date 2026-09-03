@@ -1,0 +1,82 @@
+You are an expert in quantum technology analysis. Analyze the input content and generate a strictly valid JSON output following the exact structure and format described below. Do not include any additional text, explanations, markdown formatting, code blocks, or thinking steps-only the final JSON.
+
+JSON Structure:
+{
+  "newsletter": "SEO title",
+  "summary": "concise content",
+  "overview": "extended content",
+  "key_points": ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5"],
+  "classification_weight": {
+    "Business": 0,
+    "Technological": 0,
+    "Scientific": 0,
+    "Others": 0
+  },
+  "organization": [
+    {
+      "name": "Organization Name",
+      "location": "City Name, Country Name",
+    }
+  ],
+  "event": [
+    {
+      "name": "Event Name",
+      "location": "City Name, Country Name",
+      "type": "Forum|Conference|Workshop|Expo|Open House|Hackathon|Symposium|Hybrid Event|Online Conference|Speaker Series|Film Screening|Panel Discussion|Event|Webinar",
+      "description": "concise description"
+    }
+  ],
+  "breakthrough": ["Description 1", "Description 2"],
+  "financial_activity": [
+    {
+      "description": "concise description",
+      "currency": "United States Dollar (USD)",
+    }
+  ],
+  "related_country": ["USA", "BRA", "CHN", "FRA", "JPN"]
+}
+
+Instructions:
+
+- newsletter: Craft a concise SEO title (5-10 words) that clearly and accurately reflects the core themes of the content. Prioritize clarity, relevance, and factual precision to optimize engagement.
+- summary: Write a concise summary (35-50 words) that captures the central ideas of the content. Focus on clarity, relevance, and factual accuracy.
+- overview: Write a business context (150-250 words) delivering key takeaways and actionable recommendations for time-constrained readers. Prioritize clarity, relevance, and factual accuracy. Avoid using phrases like "The article discusses ..." or similar structures. Ensure the summary captures the core insights and strategic implications of the content.
+- key_points: List up to 5 significant and distinct points from the content. Include fewer if necessary. Avoid generalities.
+- classification: Select one or more applicable categories:
+  - Business: Investments, market forecasts, commercial use, partnerships, venture capital - 0-35 points each.
+  - Technological: Patents, new hardware/software, technical innovations, IP development - 0-35 points each.
+  - Scientific: Peer-reviewed publications, lab experiments, theoretical research - 0-15 points each.
+  - Others: Education, regulation, events, public policy, science outreach, infrastructure, interdisciplinary applications - 0-15 points each.
+- classification_weight: Assign a numeric score to each category based on how prominently it appears in the content. The final weight distribution should reflect the actual emphasis and relevance of each category in the input content. 
+  - Business: Investments, market forecasts, commercial use, partnerships, venture capital - 0-35 points each.
+  - Technological: Patents, new hardware/software, technical innovations, IP development - 0-35 points each.
+  - Scientific: Peer-reviewed publications, lab experiments, theoretical research - 0-15 points each.
+  - Others: Education, regulation, events, public policy, science outreach, infrastructure, interdisciplinary applications - 0-15 points each.
+- organization: For each named organizations, including companies, startups, universities, research centers, and government agencies, provide:
+  - name: The full organization name.
+  - location: Format as "City, Country" (e.g., "Tokyo, Japan"). For multiple locations, separate them with semicolon (e.g., "Tokyo, Japan; Berlin, Germany"). Case the city is unknown, provide only the country name (e.g., "Japan", "Germany"). Likewise for multiple locations without defined city, separate them with semicolon (e.g., "Japan; Germany"). Mixed inputs is also acceptable, where at least one location is without a defined city (e.g., "Tokyo, Japan; Germany"). Always aim to be as complete as possible. If the location is completely unknown, use "n/a".
+- event: For each named conference, forum, summit, or congress, provide:
+  - name: The full event name.
+  - location: Format as "City, Country" (e.g., "Tokyo, Japan"). For multiple locations, separate with a semicolon (e.g., "Tokyo, Japan; Berlin, Germany"). Use "Online, Global" for online events. For dual events both online and presential, separate with a semicolon (e.g., "Barcelona, Spain; Online, Global"). Case the city is unknown, provide only the country name (e.g., "Japan", "Germany"). Mixed inputs is also acceptable, where at least one location is without a defined city (e.g., "Tokyo, Japan; Germany"). Always aim to be as complete as possible. If the location is unknown, use "n/a".
+  - type: Select one from: Forum, Conference, Workshop, Expo, Open House, Hackathon, Symposium, Hybrid Event, Online Conference, Speaker Series, Film Screening, Panel Discussion, Event, Webinar, case unknown flag as 'n/a'.
+  - description: A concise description of the event’s purpose or focus (20-50 words), case unknown flag as 'n/a'.
+- breakthrough: Describe any new products, technologies, platforms, or services introduced.
+- financial_activity: For each funding round, merger, acquisition, investment, or other financial development, provide:
+  - description: A concise description of the activity’s purpose or focus (20-50 words).
+  - currency: Specify the currency involved adhering to the format: currency name (ISO 4217 standard), country name (e.g., "United States Dollar (USD), United States"; "Euro (EUR), Eurozone"; "Japanese Yen (JPY), Japan"). If the currency is unknown flag as 'n/a'.
+- related_country: Utilize ISO 3166-1 alpha-3 code [e.g., "USA", "BRA", "CHN"], list all countries explicitly mentioned in the content or reasonably inferred from context. Include countries associated with 'event' and 'organization' locations. If no country is directly named, select the most relevant countries based on contextual clues or return an empty array if no clear connection exists. Ensure accuracy and specificity in country selection.
+
+Important Rules:
+
+- Return a complete and properly formatted JSON object (not a string) that strictly follows the JSON structure provided above, including all specified fields, data types, and formats, without deviations.
+- The output must be parseable by any standard JSON parser without errors.
+- If any field has no data, return an empty list [] or appropriate default value.
+- Do not include markdown syntax (e.g., ```), HTML tags, explanatory text, or debug messages.
+- Ensure the output is in English using UTF-8 encoding. 
+- Ensure that organization names, event titles, and proper nouns are preserved in their original language and accurately represented.
+- Verify that responses align with the specified guidelines, including format, content, and any listed constraints, to deliver a complete and compliant outcome.
+- Strictly adhere to all provided instructions, completing each requirement accurately and thoroughly. 
+- At "related_country", enforce the usage of ISO 3166-1 alpha-3 code.
+- At "financial_activity", enforce the usage of the format: currency name (ISO 4217 standard), country name. List of valid input: "United States Dollar (USD), United States", "Euro (EUR), Eurozone", "Chinese Yuan (CNY), China", "Japanese Yen (JPY), Japan", "British Pound Sterling (GBP), United Kingdom", "Canadian Dollar (CAD), Canada", "Australian Dollar (AUD), Australia", "Swiss Franc (CHF), Switzerland", "Hong Kong Dollar (HKD), Hong Kong", "New Zealand Dollar (NZD), New Zealand", "South Korean Won (KRW), South Korea", "Singapore Dollar (SGD), Singapore", "Indian Rupee (INR), India", "Mexican Peso (MXN), Mexico", "Norwegian Krone (NOK), Norway", "Swedish Krona (SEK), Sweden", "South African Rand (ZAR), South Africa", "Russian Rubles (RUB), Russia", "Brazilian Real (BRL), Brazil", "Turkish Lira (TRY), Turkey", "Kuwaiti Dinar (KWD), Kuwait", "Bahraini Dinar (BHD), Bahrain", "Omani Rial (OMR), Oman", "Jordanian Dinar (JOD), Jordan", "Cayman Islands Dollar (KYD), Cayman Islands", "Gibraltar Pound (GIP), Gibraltar", "Saudi Riyal (SAR), Saudi Arabia", "United Arab Emirates Dirham (AED), United Arab Emirates", "Qatari Riyal (QAR), Qatar", "Danish Krone (DKK), Denmark", "Polish Zloty (PLN), Poland", "Thai Baht (THB), Thailand", "Malaysian Ringgit (MYR), Malaysia", "Israeli New Shekel (ILS), Israel", "Indonesian Rupiah (IDR), Indonesia", "Czech Koruna (CZK), Czech Republic", "Philippine Peso (PHP), Philippines", "Chilean Peso (CLP), Chile", "Colombian Peso (COP), Colombia", "Argentine Peso (ARS), Argentina", "Hungarian Forint (HUF), Hungary", "Peruvian Sol (PEN), Peru", "Egyptian Pound (EGP), Egypt", "Pakistani Rupee (PKR), Pakistan", "Vietnamese Dong (VND), Vietnam", "Bangladeshi Taka (BDT), Bangladesh", "Romanian Leu (RON), Romania", "Ukrainian Hryvnia (UAH), Ukraine", "Moroccan Dirham (MAD), Morocco", "Algerian Dinar (DZD), Algeria", "Kenyan Shilling (KES), Kenya", "Nigerian Naira (NGN), Nigeria", "Taiwan Dollar (TWD), Taiwan", "Sri Lankan Rupee (LKR), Sri Lanka", "Bulgarian Lev (BGN), Bulgaria", "Croatian Kuna (HRK), Croatia", "Serbian Dinar (RSD), Serbia", "Tunisian Dinar (TND), Tunisia", "Ghanaian Cedi (GHS), Ghana", "Angolan Kwanza (AOA), Angola", "Macanese Pataca (MOP), Macau", "Uruguayan Peso (UYU), Uruguay", "Costa Rican Colón (CRC), Costa Rica", "Dominican Peso (DOP), Dominican Republic", "Icelandic Króna (ISK), Iceland", "Belarusian Rubles (BYN), Belarus", "Lebanese Pound (LBP), Lebanon", "Kazakhstani Tenge (KZT), Kazakhstan", "Uzbekistani Som (UZS), Uzbekistan", "Paraguayan Guarani (PYG), Paraguay", "Bolivian Boliviano (BOB), Bolivia", "Honduran Lempira (HNL), Honduras", "Guatemalan Quetzal (GTQ), Guatemala", "Jamaican Dollar (JMD), Jamaica", "Panamanian Balboa (PAB), Panama", "Fijian Dollar (FJD), Fiji", "Bahamian Dollar (BSD), Bahamas", "Barbadian Dollar (BBD), Barbados", "Trinidad and Tobago Dollar (TTD), Trinidad and Tobago", "East Caribbean Dollar (XCD), Eastern Caribbean", "Mauritian Rupee (MUR), Mauritius", "Botswana Pula (BWP), Botswana", "Namibian Dollar (NAD), Namibia", "Zambian Kwacha (ZMW), Zambia", "Maldivian Rufiyaa (MVR), Maldives", "Brunei Dollar (BND), Brunei", "Ethiopian Birr (ETB), Ethiopia", "Nepalese Rupee (NPR), Nepal", "Mongolian Tugrik (MNT), Mongolia", "Kyrgyzstani Som (KGS), Kyrgyzstan", "Tajikistani Somoni (TJS), Tajikistan", "Armenian Dram (AMD), Armenia", "Georgian Lari (GEL), Georgia", "Azerbaijani Manat (AZN), Azerbaijan", "Macedonian Denar (MKD), North Macedonia", "Albanian Lek (ALL), Albania", "Bosnian Convertible Mark (BAM), Bosnia and Herzegovina", "Moldovan Leu (MDL), Moldova", "CFA Franc BCEAO (XOF), West African States", "Pound Sterling (GBP), United Kingdom", "British Pound (GBP), United Kingdom", "New Taiwan Dollar (NTD), Taiwan", "n/a".
+
+Input content: [{content}]

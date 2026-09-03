@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "newsletter": {
+      "type": "string",
+      "description": "A concise SEO title (5-10 words) reflecting core themes of the content.",
+      "minLength": 25,
+      "maxLength": 85
+    },
+    "summary": {
+      "type": "string",
+      "description": "A concise summary (35-50 words) capturing central ideas of the content.",
+      "minLength": 250,
+      "maxLength": 400
+    },
+    "overview": {
+      "type": "string",
+      "description": "An extended business context (150-250 words) with key takeaways and recommendations.",
+      "minLength": 700,
+      "maxLength": 1500
+    },
+    "key_points": {
+      "type": "array",
+      "description": "Up to 5 significant and distinct points from the content.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 0,
+      "maxItems": 5
+    },
+    "classification_weight": {
+      "type": "object",
+      "description": "Numeric scores reflecting prominence of each category.",
+      "properties": {
+        "Business": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 35
+        },
+        "Technological": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 35
+        },
+        "Scientific": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "Others": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        }
+      },
+      "required": ["Business", "Technological", "Scientific", "Others"],
+      "additionalProperties": false
+    },
+    "organization": {
+      "type": "array",
+      "description": "List of named organizations (companies, universities, etc.).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Full name of the event.",
+            "minLength": 3,
+            "maxLength": 150
+          },
+          "location": {
+            "type": "string",
+            "description": "Organization location as 'City, Country' or 'Country'.",
+            "minLength": 3,
+            "maxLength": 50
+          }
+        },
+        "required": ["name", "location"],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },	
+    "event": {
+      "type": "array",
+      "description": "Details of named conferences, forums, summits, or congresses.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Full name of the event."
+          },
+          "location": {
+            "type": "string",
+            "description": "Event location as 'City, Country' or 'Online, Global' for online events."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "Forum",
+              "Conference",
+              "Workshop",
+              "Expo",
+              "Open House",
+              "Hackathon",
+              "Symposium",
+              "Hybrid Event",
+              "Online Conference",
+              "Speaker Series",
+              "Film Screening",
+              "Panel Discussion",
+              "Event",
+              "Webinar",
+              "n/a"
+            ],
+            "description": "Type of event."
+          },
+          "description": {
+            "type": "string",
+            "description": "Concise description of the event’s purpose (20-50 words).",
+            "minLength": 150,
+            "maxLength": 400
+          }
+        },
+        "required": ["name", "location", "type", "description"],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "breakthrough": {
+      "type": "array",
+      "description": "Descriptions of new products, technologies, platforms, or services.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 0
+    },
+    "financial_activity": {
+      "type": "array",
+      "description": "Details of funding rounds, mergers, acquisitions, or investments.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Concise description of the financial activity (20-50 words).",
+            "minLength": 150,
+            "maxLength": 400
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency unit (e.g., 'United States Dollar (USD), United States'; 'Euro (EUR), Eurozone'; 'Japanese Yen (JPY), Japan') or 'n/a' if unknown.",
+		    "items": {
+			"type": "string",
+			"enum": ["United States Dollar (USD), United States", "Euro (EUR), Eurozone", "Chinese Yuan (CNY), China", "Japanese Yen (JPY), Japan", "British Pound Sterling (GBP), United Kingdom", "Canadian Dollar (CAD), Canada", "Australian Dollar (AUD), Australia", "Swiss Franc (CHF), Switzerland", "Hong Kong Dollar (HKD), Hong Kong", "New Zealand Dollar (NZD), New Zealand", "South Korean Won (KRW), South Korea", "Singapore Dollar (SGD), Singapore", "Indian Rupee (INR), India", "Mexican Peso (MXN), Mexico", "Norwegian Krone (NOK), Norway", "Swedish Krona (SEK), Sweden", "South African Rand (ZAR), South Africa", "Russian Rubles (RUB), Russia", "Brazilian Real (BRL), Brazil", "Turkish Lira (TRY), Turkey", "Kuwaiti Dinar (KWD), Kuwait", "Bahraini Dinar (BHD), Bahrain", "Omani Rial (OMR), Oman", "Jordanian Dinar (JOD), Jordan", "Cayman Islands Dollar (KYD), Cayman Islands", "Gibraltar Pound (GIP), Gibraltar", "Saudi Riyal (SAR), Saudi Arabia", "United Arab Emirates Dirham (AED), United Arab Emirates", "Qatari Riyal (QAR), Qatar", "Danish Krone (DKK), Denmark", "Polish Zloty (PLN), Poland", "Thai Baht (THB), Thailand", "Malaysian Ringgit (MYR), Malaysia", "Israeli New Shekel (ILS), Israel", "Indonesian Rupiah (IDR), Indonesia", "Czech Koruna (CZK), Czech Republic", "Philippine Peso (PHP), Philippines", "Chilean Peso (CLP), Chile", "Colombian Peso (COP), Colombia", "Argentine Peso (ARS), Argentina", "Hungarian Forint (HUF), Hungary", "Peruvian Sol (PEN), Peru", "Egyptian Pound (EGP), Egypt", "Pakistani Rupee (PKR), Pakistan", "Vietnamese Dong (VND), Vietnam", "Bangladeshi Taka (BDT), Bangladesh", "Romanian Leu (RON), Romania", "Ukrainian Hryvnia (UAH), Ukraine", "Moroccan Dirham (MAD), Morocco", "Algerian Dinar (DZD), Algeria", "Kenyan Shilling (KES), Kenya", "Nigerian Naira (NGN), Nigeria", "Taiwan Dollar (TWD), Taiwan", "Sri Lankan Rupee (LKR), Sri Lanka", "Bulgarian Lev (BGN), Bulgaria", "Croatian Kuna (HRK), Croatia", "Serbian Dinar (RSD), Serbia", "Tunisian Dinar (TND), Tunisia", "Ghanaian Cedi (GHS), Ghana", "Angolan Kwanza (AOA), Angola", "Macanese Pataca (MOP), Macau", "Uruguayan Peso (UYU), Uruguay", "Costa Rican Colón (CRC), Costa Rica", "Dominican Peso (DOP), Dominican Republic", "Icelandic Króna (ISK), Iceland", "Belarusian Rubles (BYN), Belarus", "Lebanese Pound (LBP), Lebanon", "Kazakhstani Tenge (KZT), Kazakhstan", "Uzbekistani Som (UZS), Uzbekistan", "Paraguayan Guarani (PYG), Paraguay", "Bolivian Boliviano (BOB), Bolivia", "Honduran Lempira (HNL), Honduras", "Guatemalan Quetzal (GTQ), Guatemala", "Jamaican Dollar (JMD), Jamaica", "Panamanian Balboa (PAB), Panama", "Fijian Dollar (FJD), Fiji", "Bahamian Dollar (BSD), Bahamas", "Barbadian Dollar (BBD), Barbados", "Trinidad and Tobago Dollar (TTD), Trinidad and Tobago", "East Caribbean Dollar (XCD), Eastern Caribbean", "Mauritian Rupee (MUR), Mauritius", "Botswana Pula (BWP), Botswana", "Namibian Dollar (NAD), Namibia", "Zambian Kwacha (ZMW), Zambia", "Maldivian Rufiyaa (MVR), Maldives", "Brunei Dollar (BND), Brunei", "Ethiopian Birr (ETB), Ethiopia", "Nepalese Rupee (NPR), Nepal", "Mongolian Tugrik (MNT), Mongolia", "Kyrgyzstani Som (KGS), Kyrgyzstan", "Tajikistani Somoni (TJS), Tajikistan", "Armenian Dram (AMD), Armenia", "Georgian Lari (GEL), Georgia", "Azerbaijani Manat (AZN), Azerbaijan", "Macedonian Denar (MKD), North Macedonia", "Albanian Lek (ALL), Albania", "Bosnian Convertible Mark (BAM), Bosnia and Herzegovina", "Moldovan Leu (MDL), Moldova", "CFA Franc BCEAO (XOF), West African States", "Pound Sterling (GBP), United Kingdom", "British Pound (GBP), United Kingdom", "New Taiwan Dollar (NTD), Taiwan", "n/a"]
+		  },
+		  "minItems": 0
+          }
+        },
+        "required": ["description", "currency"],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "related_country": {
+      "type": "array",
+      "description": "Countries relevant to the content, using ISO 3166-1 alpha-3 codes.",
+      "items": {
+        "type": "string",
+        "enum": ["ABW", "AFG", "AGO", "AIA", "ALA", "ALB", "AND", "ARE", "ARG", "ARM", "ASM", "ATA", "ATF", "ATG", "AUS", "AUT", "AZE", "BDI", "BEL", "BEN", "BES", "BFA", "BGD", "BGR", "BHR", "BHS", "BIH", "BLM", "BLR", "BLZ", "BMU", "BOL", "BRA", "BRB", "BRN", "BTN", "BVT", "BWA", "CAF", "CAN", "CCK", "CHE", "CHL", "CHN", "CIV", "CMR", "COD", "COG", "COK", "COL", "COM", "CPV", "CRI", "CUB", "CUW", "CXR", "CYM", "CYP", "CZE", "DEU", "DJI", "DMA", "DNK", "DOM", "DZA", "ECU", "EGY", "ERI", "ESH", "ESP", "EST", "ETH", "FIN", "FJI", "FLK", "FRA", "FRO", "FSM", "GAB", "GBR", "GEO", "GGY", "GHA", "GIB", "GIN", "GLP", "GMB", "GNB", "GNQ", "GRC", "GRD", "GRL", "GTM", "GUF", "GUM", "GUY", "HKG", "HMD", "HND", "HRV", "HTI", "HUN", "IDN", "IMN", "IND", "IOT", "IRL", "IRN", "IRQ", "ISL", "ISR", "ITA", "JAM", "JEY", "JOR", "JPN", "KAZ", "KEN", "KGZ", "KHM", "KIR", "KNA", "KOR", "KWT", "LAO", "LBN", "LBR", "LBY", "LCA", "LIE", "LKA", "LSO", "LTU", "LUX", "LVA", "MAC", "MAF", "MAR", "MCO", "MDA", "MDG", "MDV", "MEX", "MHL", "MKD", "MLI", "MLT", "MMR", "MNE", "MNG", "MNP", "MOZ", "MRT", "MSR", "MTQ", "MUS", "MWI", "MYS", "MYT", "NAM", "NCL", "NER", "NFK", "NGA", "NIC", "NIU", "NLD", "NOR", "NPL", "NRU", "NZL", "OMN", "PAK", "PAN", "PCN", "PER", "PHL", "PLW", "PNG", "POL", "PRI", "PRK", "PRT", "PRY", "PSE", "PYF", "QAT", "REU", "ROU", "RUS", "RWA", "SAU", "SDN", "SEN", "SGP", "SGS", "SHN", "SJM", "SLB", "SLE", "SLV", "SMR", "SOM", "SPM", "SRB", "SSD", "STP", "SUR", "SVK", "SVN", "SWE", "SWZ", "SXM", "SYC", "SYR", "TCA", "TCD", "TGO", "THA", "TJK", "TKL", "TKM", "TLS", "TON", "TTO", "TUN", "TUR", "TUV", "TWN", "TZA", "UGA", "UKR", "UMI", "URY", "USA", "UZB", "VAT", "VCT", "VEN", "VGB", "VIR", "VNM", "VUT", "WLF", "WSM", "YEM", "ZAF", "ZMB", "ZWE", "NTD"]
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "newsletter",
+    "summary",
+    "overview",
+    "key_points",
+    "classification",
+    "classification_weight",
+    "organization",
+    "event",
+    "breakthrough",
+    "financial_activity",
+    "related_country"
+  ],
+  "additionalProperties": false
+}
