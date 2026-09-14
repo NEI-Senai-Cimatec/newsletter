@@ -12,6 +12,7 @@ from core.task_runner import QueueHandler
 from core.utils import DOCUMENTS_JSON
 from gui.components.sidebar import Sidebar
 from gui.components.status_bar import StatusBar
+from gui.frames.dashboard_frame import DashboardFrame
 from gui.frames.home_frame import HomeFrame
 from gui.frames.login_frame import LoginFrame
 from gui.frames.log_frame import LogFrame
@@ -40,9 +41,9 @@ SEARCH_DEBOUNCE_MS = 200
 
 
 class _PlaceholderFrame(ctk.CTkFrame):
-    """Stand-in for a future QuIIN module (dashboard/documents/accounts).
+    """Stand-in for a future QuIIN module (documents/accounts).
 
-    Tasks 8/10/11 replace these placeholders with the real frames. The stub
+    Tasks 10/11 replace these placeholders with the real frames. The stub
     honors the established frame contract (``__init__(master, app)``,
     ``on_show``) plus ``apply_search`` so the header global search can
     forward filtered lists without crashing.
@@ -239,9 +240,7 @@ class App(ctk.CTk):
         self.frames = {
             "login": LoginFrame(self.container, self),
             "home": HomeFrame(self.container, self),
-            "dashboard": _PlaceholderFrame(
-                self.container, self, "📊 Dashboard",
-                "Módulo Dashboard em construção (FASE 3)."),
+            "dashboard": DashboardFrame(self.container, self),
             "documents": _PlaceholderFrame(
                 self.container, self, "📄 Documentos",
                 "Módulo Documentos em construção (FASE 5)."),
