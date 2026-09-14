@@ -7,7 +7,7 @@ from datetime import datetime
 import html
 from bs4 import BeautifulSoup
 import re
-from utils import (
+from core.utils import (
     get_cached_page, parse_article_date, ensure_directories,
     ARTICLE_DIR, CACHE_DIR, HTML_TEMPLATE,
     get_cache_file_name, initialize_driver, 

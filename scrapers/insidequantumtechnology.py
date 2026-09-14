@@ -8,12 +8,12 @@ import html
 from bs4 import BeautifulSoup
 from json_repair import repair_json
 import re
-from utils import (
+from core.utils import (
     get_cached_page, parse_article_date, ensure_directories,
     ARTICLE_DIR, CACHE_DIR, HTML_TEMPLATE,
     get_cache_file_name, initialize_driver, 
     logger, generate_content_text, generate_content_json,
-    remove_dupes, sortbydate
+    remove_dupes, sortbydate, is_after_min_date
 )
 
 #################
@@ -228,7 +228,8 @@ def iqt_generate_article_html(url, articles_dict, ignore_cache, driver, debug=Fa
                 'source': 'Inside Quantum Technology'                    
             }
               
-def insidequantumtechnology(model, articles_dict, ignore_cache=False, debug=False):
+def insidequantumtechnology(model, articles_dict, ignore_cache=False, debug=False,
+                            min_date=None, should_cancel=None):
     
     driver = initialize_driver()
     
@@ -252,26 +253,42 @@ def insidequantumtechnology(model, articles_dict, ignore_cache=False, debug=Fals
         
         ignore_urls = ['']
         
+        i = 0
+        
         for article_data in url_list:
+
+            i = i + 1
+            
+            logger.warning(f"Current URL: {i} / {number_urls}")
 
             article_url = article_data['url'] 
             
+            if should_cancel is not None and should_cancel():
+                logger.warning("Cancelamento solicitado pelo usuário. Interrompendo portal.")
+                break
+            
             if article_url in ignore_urls:
                 continue
-                          
+                           
             article_hash = hashlib.sha256(article_url.encode()).hexdigest()
             
             # Generate HTML        
-            step0 = iqt_generate_article_html(article_url, articles_dict, ignore_cache, driver, debug)
+            iqt_generate_article_html(article_url, articles_dict, ignore_cache, driver, debug)
         
-            if step0 == False:
+            article_entry = articles_dict.get(article_url)
+            if article_entry is None:
+                logger.warning(f"Skip due to invalid article dict!")
+                continue
+
+            if not is_after_min_date(article_entry.get('published'), min_date):
+                logger.warning(f"Skip due to published date ({article_entry.get('published')})!")
                 continue
             
             # Generate TXT
-            #generate_content_text(article_hash, debug=debug)
+            generate_content_text(article_hash, debug=debug)
             
             # Generate JSON
-            #generate_content_json(model, article_hash, 'en', debug=debug) 
+            generate_content_json(model, article_hash, 'en', debug=debug) 
                 
     finally:
         driver.quit()

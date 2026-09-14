@@ -46,16 +46,19 @@ Depois que o motor principal termina sua execução, uma ferramenta auxiliar con
 
 ```
 .
-├── run.py                        # Motor principal (coleta + processamento via IA)
-├── merge.py                      # Ferramenta auxiliar (consolidação da base final)
-├── utils.py                      # Funções compartilhadas: cache, IA, validação, I/O
-├── thequantuminsider.py          # Coletor: The Quantum Insider
-├── quantamagazine.py             # Coletor: Quanta Magazine
-├── quantumzeitgeist.py           # Coletor: Quantum Zeitgeist
-├── insidequantumtechnology.py    # Coletor: Inside Quantum Technology
+├── main.py                       # Interface gráfica desktop (CustomTkinter)
+├── run.py                        # CLI: coleta + processamento via API de IA
+├── merge.py                      # CLI auxiliar: consolidação da base final
+├── core/                         # config_manager, api_client, preflight, task_runner, utils
+├── scrapers/                     # Coletores: thequantuminsider, quantamagazine,
+│                                 # quantumzeitgeist, insidequantumtechnology
+├── gui/                          # app, frames (home/settings/scraper/results/log),
+│                                 # components (sidebar/status/dialogs), theme
+├── tests/                        # Suíte pytest do núcleo (core/)
 ├── template/                     # Templates de prompt, schema JSON e HTML em uso
 ├── legacy/                       # Código e templates superados, mantidos como referência
 ├── requirements.txt
+├── requirements-dev.txt
 └── .gitignore
 ```
 
@@ -66,39 +69,78 @@ Os diretórios `cache/`, `article/`, `content/` e `parse/`, além dos arquivos `
 Ambiente:
 
 ```
-Python 3.10.19
+Python 3.10+
 ```
 
-Instalação das dependências:
+Recomenda-se um ambiente virtual isolado (nenhuma etapa exige permissão
+de administrador):
 
 ```
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+Para desenvolvimento/testes, instale também `requirements-dev.txt`
+e rode a suíte com `python -m pytest tests -q`.
+
+A integração com IA usa provedores via API (Groq, OpenRouter, NVIDIA NIM,
+OpenAI ou endpoint personalizado) através do cliente unificado
+`core/api_client.py`. A antiga dependência do LM Studio local (`lmstudio`)
+foi removida.
+
 ## 5. Execução
 
-A execução ocorre em duas etapas, nesta ordem:
+### 5.0 Interface Gráfica (recomendado)
+
+```
+python main.py
+```
+
+Fluxo de operação para o usuário:
+
+1. Em **⚙️ Configurações**, escolha o provedor de IA, cadastre a API key
+   (guardada no cofre do sistema operacional), escolha o modelo e os
+   portais, e clique em **🔗 Testar Conexão**.
+2. Em **🚀 Execução**, confira o pré-voo (navegador, driver, internet, chave,
+   conexão com o provedor, diretórios e templates), ajuste as opções
+   (incluindo **A partir de**, o filtro de data mínima) e clique em
+   **▶ Iniciar Pipeline**. O progresso e os logs aparecem em tempo real.
+3. Em **📊 Resultados**, navegue pela base consolidada (`documents-data.json`)
+   e exporte CSV se necessário.
+
+As configurações ficam em `~/.newsletter_tool/` (pasta do usuário).
+O ChromeDriver é baixado para `~/.wdm/` (pasta do usuário).
+Nada exige permissão de administrador.
+
+### 5.1 Linha de Comando (headless)
+
+A execução por CLI ocorre em duas etapas, nesta ordem:
 
 - `python run.py`: motor principal. Coleta, processa e extrai as notícias.
 - `python merge.py`: ferramenta auxiliar. Consolida os dados na base final.
 
-`run.py` aceita dois parâmetros opcionais:
+`run.py` lê provedor, modelo, portais e filtro de data do arquivo de
+configuração (`~/.newsletter_tool/config.json`), com sobrescrita por flags:
 
 - `--debug`: ativa logs detalhados (nível DEBUG) e salva arquivos auxiliares para depuração.
 - `--ignore-cache`: ignora o cache local e baixa novamente todas as páginas.
+- `--provider`, `--model`, `--api-key`, `--min-date`, `--portals`: sobrescrevem o config.
 
-Por padrão, apenas o portal The Quantum Insider está ativo em `run.py`. Para incluir outro portal, remova o comentário da chamada correspondente na função `main()` (por exemplo, `quantamagazine(...)`).
+Por padrão, apenas o portal The Quantum Insider está habilitado no config.
+Para incluir outro portal pela CLI, passe `--portals`
+(ex.: `--portals thequantuminsider,quantamagazine`).
 
-### 5.1 Motor Principal (run.py)
+### 5.2 Motor Principal (run.py)
 
 A execução do motor principal passa por cinco estágios, descritos a seguir.
 
 **Estágio 1: Carregamento do Modelo**
 
-O motor inicializa a conexão com o servidor local do modelo de linguagem (LM Studio). O log confirma o carregamento do modelo e o estabelecimento da sessão websocket.
+O motor inicializa o cliente do provedor de IA configurado (Groq, OpenRouter, NVIDIA NIM, OpenAI ou endpoint personalizado). O log confirma o provedor e o modelo em uso.
 
 <p align="center"><img src="./docs/images/image1.png" width="650"></p>
-<p align="center"><i>Estágio 1: inicialização do modelo local</i></p>
+<p align="center"><i>Estágio 1: inicialização do cliente do provedor de IA</i></p>
 
 **Estágio 2: Carregamento do Scraper**
 
@@ -128,7 +170,7 @@ Ao final da varredura, a sessão do WebDriver é encerrada, as notícias são or
 <p align="center"><img src="./docs/images/image4.png" width="650"></p>
 <p align="center"><i>Estágio 5: encerramento e gravação do resultado</i></p>
 
-### 5.2 Ferramenta Auxiliar (merge.py)
+### 5.3 Ferramenta Auxiliar (merge.py)
 
 Após a execução do motor principal, execute merge.py para consolidar os dados extraídos e processados pela IA na base final utilizada na produção da newsletter (documents-data.json).
 

@@ -13,8 +13,15 @@ cloudscraper
 beautifulsoup4
 lxml
 
-# Integração com o LLM local (LM Studio)
-lmstudio
+# GUI desktop
+customtkinter>=5.2.0
+
+# Integração LLM via API (cliente unificado OpenAI-compatible;
+# substitui o LM Studio local)
+openai>=1.30.0
+
+# Armazenamento seguro de API keys (cofre nativo do SO)
+keyring
 
 # Reparo de JSON e parsing de datas
 json-repair

@@ -8,12 +8,12 @@ import html
 from bs4 import BeautifulSoup
 from json_repair import repair_json
 import re
-from utils import (
+from core.utils import (
     get_cached_page, parse_article_date, ensure_directories,
     ARTICLE_DIR, CACHE_DIR, HTML_TEMPLATE,
     get_cache_file_name, initialize_driver, 
     logger, generate_content_text, generate_content_json,
-    remove_dupes, sortbydate
+    remove_dupes, sortbydate, is_after_min_date
 )
 
 #################
@@ -239,7 +239,8 @@ def qz_generate_article_html(url, articles_dict, ignore_cache, driver, debug=Fal
             
             return article_dict
               
-def quantumzeitgeist(model, articles_dict, ignore_cache=False, debug=False):
+def quantumzeitgeist(model, articles_dict, ignore_cache=False, debug=False,
+                     min_date=None, should_cancel=None):
     
     driver = initialize_driver()
     
@@ -271,6 +272,10 @@ def quantumzeitgeist(model, articles_dict, ignore_cache=False, debug=False):
 
             article_url = article_data['url'] 
             
+            if should_cancel is not None and should_cancel():
+                logger.warning("Cancelamento solicitado pelo usuário. Interrompendo portal.")
+                break
+            
             if article_url in ignore_urls:
                 continue
                           
@@ -283,8 +288,8 @@ def quantumzeitgeist(model, articles_dict, ignore_cache=False, debug=False):
                 logger.warning(f"Skip due to invalid article dict!")
                 continue
             
-            if '2025-10' not in article_dict['published']:
-                logger.warning(f"Skip due to published date!")
+            if not is_after_min_date(article_dict.get('published'), min_date):
+                logger.warning(f"Skip due to published date ({article_dict.get('published')})!")
                 continue
             
             # Generate TXT

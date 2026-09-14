@@ -1,0 +1,3 @@
+# Dependências de desenvolvimento e teste da
+# Ferramenta de Processamento de Notícias.
+pytest
