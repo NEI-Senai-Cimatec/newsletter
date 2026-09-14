@@ -2,7 +2,6 @@
 """Provider, model, portal, and LLM-parameter configuration screen."""
 import logging
 import queue
-import sqlite3
 import threading
 import webbrowser
 
@@ -403,8 +402,6 @@ class SettingsFrame(ctk.CTkFrame):
             org = self.profile_org_entry.get().strip()
         except Exception:
             return
-        if not name:
-            return
         try:
             current = {}
             for user in database.list_users(DB_FILE):
@@ -414,10 +411,7 @@ class SettingsFrame(ctk.CTkFrame):
             if (current.get("name", "") or "") == name and (
                     current.get("org", "") or "") == org:
                 return
-            database.init_db(DB_FILE)
-            with sqlite3.connect(str(DB_FILE)) as conn:
-                conn.execute("UPDATE users SET name = ?, org = ? WHERE username = ?",
-                             (name, org, username))
+            database.update_profile(DB_FILE, username, name, org)
             try:
                 self.app.session["name"] = name
                 self.app.session["org"] = org

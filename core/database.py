@@ -149,3 +149,14 @@ def reset_admin_via_recovery_code(db_path: Path | str, code: str, new_password: 
     with _connect(db_path) as conn:
         conn.execute("DELETE FROM meta WHERE key = 'admin_recovery'")
     return True
+
+
+def update_profile(db_path: Path | str, username: str, name: str, org: str) -> None:
+    if not (name or "").strip():
+        raise ValueError("name must be non-empty")
+    init_db(db_path)
+    with _connect(db_path) as conn:
+        cursor = conn.execute("UPDATE users SET name = ?, org = ? WHERE username = ?",
+                              (name.strip(), (org or "").strip(), username))
+        if cursor.rowcount == 0:
+            raise ValueError(f"unknown username {username!r}")
