@@ -227,8 +227,9 @@ class SettingsFrame(ctk.CTkFrame):
                                   self.max_tokens_entry, self.temp_slider,
                                   self.top_p_slider, self.min_date_entry]
 
-        ctk.CTkButton(self, text="💾 Salvar configurações",
-                      command=self.save).pack(pady=(0, 16))
+        self.save_button = ctk.CTkButton(self, text="💾 Salvar configurações",
+                                            command=self.save)
+        self.save_button.pack(pady=(0, 16))
 
     @staticmethod
     def _section(master, title: str) -> tuple[ctk.CTkFrame, ctk.CTkFrame]:
@@ -305,23 +306,32 @@ class SettingsFrame(ctk.CTkFrame):
         self._load_profile()
 
     def save(self, silent: bool = False) -> None:
-        """Persist widgets to config (API key saved separately via Salvar)."""
+        """Persist widgets to config (API key saved separately via Salvar).
+
+        AI block writes require ``configure_ai``; portals/LLM/min-date
+        require ``run_pipeline``. Profile save is always allowed.
+        """
+        role = self._current_role()
+        ai_ok = can(role, "configure_ai")
+        pipe_ok = can(role, "run_pipeline")
         config = self.app.config
-        provider_key = self._current_provider_key()
-        config["provider"] = provider_key
-        model = self.model_var.get().strip() or PROVIDERS[provider_key]["default_model"]
-        config["model"] = model
-        config["custom_endpoint"] = self.endpoint_entry.get().strip()
-        for key, var in self.portal_vars.items():
-            config["portals"][key] = bool(var.get())
-        try:
-            config["llm_settings"]["max_tokens"] = max(
-                1, int(self.max_tokens_entry.get().strip()))
-        except (ValueError, TypeError):
-            config["llm_settings"]["max_tokens"] = 10000
-        config["llm_settings"]["temperature"] = round(float(self.temp_var.get()), 2)
-        config["llm_settings"]["top_p"] = round(float(self.top_p_var.get()), 2)
-        config["scraper_settings"]["min_date"] = self.min_date_entry.get().strip()
+        if ai_ok:
+            provider_key = self._current_provider_key()
+            config["provider"] = provider_key
+            model = self.model_var.get().strip() or PROVIDERS[provider_key]["default_model"]
+            config["model"] = model
+            config["custom_endpoint"] = self.endpoint_entry.get().strip()
+        if pipe_ok:
+            for key, var in self.portal_vars.items():
+                config["portals"][key] = bool(var.get())
+            try:
+                config["llm_settings"]["max_tokens"] = max(
+                    1, int(self.max_tokens_entry.get().strip()))
+            except (ValueError, TypeError):
+                config["llm_settings"]["max_tokens"] = 10000
+            config["llm_settings"]["temperature"] = round(float(self.temp_var.get()), 2)
+            config["llm_settings"]["top_p"] = round(float(self.top_p_var.get()), 2)
+            config["scraper_settings"]["min_date"] = self.min_date_entry.get().strip()
         self._save_profile()
         self.app.save_config()
         self.app.refresh_provider_status()
@@ -362,6 +372,11 @@ class SettingsFrame(ctk.CTkFrame):
             self._gate(widget, pipe_ok, "Sem permissão: requer 'run_pipeline'.")
         self._gate(self.weights_edit_button, can(role, "edit_weights"),
                    "Sem permissão: requer 'edit_weights'.")
+        # Salvar só persiste IA/pipeline para quem tem a capacidade; o
+        # perfil salva sempre (também no on_hide). Sem nada gravável
+        # além do perfil, o botão fica desabilitado.
+        self._gate(self.save_button, ai_ok or pipe_ok,
+                   "Sem permissão: nada para salvar neste papel.")
         # O bloco de endpoint personalizado só faz sentido com IA liberada.
         try:
             if not ai_ok:
@@ -530,6 +545,9 @@ class SettingsFrame(ctk.CTkFrame):
         self.key_entry.configure(show="" if self.key_visible else "•")
 
     def _save_key(self) -> None:
+        if not can(self._current_role(), "configure_ai"):
+            self.test_label.configure(text="❌ Sem permissão: requer 'configure_ai'.")
+            return
         provider_key = self._current_provider_key()
         self.app.config_manager.set_api_key(provider_key, self.key_entry.get())
         self.test_label.configure(text="✅ API key salva no cofre do sistema.")

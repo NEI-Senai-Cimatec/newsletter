@@ -93,14 +93,14 @@ Barra lateral: 📊 Dashboard · 📄 Documentos · 🚀 Execução · 📊 Resu
 
 | Tela | O que faz | Capacidade exigida |
 |---|---|---|
-| Login | Entrar, Sign Up, recuperação, bootstrap do admin | — (aberta) |
+| Login | Entrar, Sign Up, recuperação (admin informa o usuário e usa o código de uso único; demais contatam um admin), bootstrap do admin | — (aberta) |
 | 📊 Dashboard | cards, gráficos, filtros, tabela, índice multicritério (botão Editar), newsletter Automática/Personalizada, Imprimir, Compartilhar | ver/buscar: todos; `edit_weights`: admin; `generate_newsletter`, `print`, `share`: premium+admin (botões desabilitados sem permissão) |
 | 📄 Documentos | lista paginada (20/página), detalhe com indicadores, Exportar PDF/WORD do documento, adicionar notícia manual | ver/buscar: todos; `export`: premium+admin; `add_news`: admin |
-| 🚀 Execução | pré-voo (navegador, driver, internet, chave, provedor, diretórios, templates), opções e ▶ Iniciar Pipeline em thread dedicada | `run_pipeline`: admin |
-| 📊 Resultados | base consolidada (`documents-data.json`), Exportar CSV | ver: todos |
+| 🚀 Execução | pré-voo (navegador, driver, internet, chave, provedor, diretórios, templates), opções e ▶ Iniciar Pipeline em thread dedicada | `run_pipeline`: admin (botão Iniciar desabilitado + motivo na barra de status sem a capacidade) |
+| 📊 Resultados | base consolidada (`documents-data.json`), Exportar CSV | ver: todos; `export`: premium+admin (botão desabilitado sem a capacidade) |
 | 🧾 Logs | logs da execução em tempo real (`console.txt` na raiz) | ver: todos |
 | 👥 Contas | tabela Nome \| Username \| Tipo \| Organização \| Interno/Externo \| Status; Fornecer acesso; Aprovar / Cancelar acesso / Redefinir senha | `manage_accounts`: admin (tela oculta dos demais) |
-| ⚙️ Configurações | bloco IA (provedor, chave, modelo, Testar Conexão), Perfil (nome/organização), editor de pesos, Sobre/Registro | `configure_ai`: admin (bloco IA); `edit_weights`: admin (pesos); perfil: próprio usuário |
+| ⚙️ Configurações | bloco IA (provedor, chave, modelo, Testar Conexão), portais/parâmetros do LLM/filtro de coleta, Perfil (nome/organização), editor de pesos, Sobre/Registro | `configure_ai`: admin (bloco IA — sem ela, Salvar não toca provedor/modelo/endpoint/chave); `run_pipeline`: admin (portais, LLM e data mínima — sem ela, Salvar não os toca); `edit_weights`: admin (pesos); perfil: próprio usuário, salva sempre; botão Salvar desabilitado quando o papel nada tem de gravável |
 
 Matriz de permissões (`core/permissions.py`, `CAN`):
 
@@ -146,12 +146,12 @@ Sempre `run.py` antes de `merge.py`. Pela GUI: Configurações → Testar Conex�
 
 ## 9. Exportações PDF / WORD / impressão / compartilhamento
 
-A newsletter (`core/exports.py`, `build_newsletter`) ordena os documentos por relevância e monta seções com título, resumo, pontos-chave, área, relevância, organizações, países e URL. Modos: **Automático** (top-N pelos pesos) e **Personalizado** (modal de seleção/ordenação).
+A newsletter (`core/exports.py`, `build_newsletter`) ordena os documentos por relevância e monta seções com título, resumo, pontos-chave, área, relevância, organizações, países e URL. Modos: **Automático** (top-N pelos pesos) e **Personalizado** (modal de seleção/ordenação — a ordem do modal é preservada no arquivo).
 
 - **PDF** (`export_pdf`, reportlab A4): diálogo “salvar como”, nome padrão da newsletter.
-- **WORD** (`export_word`, python-docx): `.docx` com títulos, resumo e bullets.
+- **WORD** (`export_word`, python-docx): `.docx` com títulos, resumo e bullets (somente `.docx` gera WORD; outra extensão cai no PDF).
 - **Imprimir** (`print_pdf`): no Windows envia à impressora; sem impressora, abre o PDF no visualizador.
-- **Compartilhar** (`share_package`): gera `newsletter.md` numa pasta e a abre no explorador.
+- **Compartilhar** (`share_package`): grava `newsletter.md` numa pasta e a abre no explorador (não copia nada para a área de transferência).
 - **Documento avulso** (tela Documentos): Exportar PDF / Exportar WORD do item selecionado; **CSV** da base na tela Resultados.
 
 Exportações rodam em threads dedicadas (a interface não congela) e os botões são desabilitados para quem não tem a capacidade (`Sem permissão: requer '…'`, visível na barra de status).

@@ -76,7 +76,7 @@ def load_weights(path: Path | str = WEIGHTS_FILE) -> dict[str, int]:
             data = json.load(f)
         validate_weights(data)
         return dict(data)
-    except (FileNotFoundError, ValueError):
+    except (OSError, ValueError):
         return dict(DEFAULT_WEIGHTS)
 
 

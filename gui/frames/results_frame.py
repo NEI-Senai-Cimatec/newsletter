@@ -12,6 +12,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
+from core.permissions import can
 from core.utils import APP_ROOT, DOCUMENTS_JSON
 from gui.theme.colors import NORMAL_FONT, SECTION_FONT, SMALL_FONT, TITLE_FONT
 
@@ -66,11 +67,35 @@ class ResultsFrame(ctk.CTkFrame):
         footer.pack(pady=(0, 16))
         ctk.CTkButton(footer, text="📂 Abrir Pasta de Dados",
                       command=self._open_data_dir).pack(side="left", padx=8)
-        ctk.CTkButton(footer, text="📋 Exportar CSV",
-                      command=self._export_csv).pack(side="left", padx=8)
+        self.export_button = ctk.CTkButton(footer, text="📋 Exportar CSV",
+                                           command=self._export_csv)
+        self.export_button.pack(side="left", padx=8)
+
+    def _role(self) -> str:
+        try:
+            return str((self.app.session or {}).get("role", "basico"))
+        except Exception:
+            return "basico"
+
+    def _apply_role_gating(self) -> None:
+        """Disable CSV export without ``export`` (tip via ``set_gated``)."""
+        allowed = can(self._role(), "export")
+        try:
+            if hasattr(self.app, "set_gated"):
+                self.app.set_gated(self.export_button, allowed,
+                                   "Sem permissão: requer 'export'.")
+                return
+        except Exception:
+            pass
+        try:
+            self.export_button.configure(
+                state="normal" if allowed else "disabled")
+        except Exception:
+            pass
 
     def on_show(self) -> None:
         """Reload the database from disk."""
+        self._apply_role_gating()
         self.articles = self._load_articles()
         for child in self.list_box.winfo_children():
             child.destroy()
@@ -159,6 +184,8 @@ class ResultsFrame(ctk.CTkFrame):
             logging.getLogger(__name__).error(f"Could not open data dir: {e}")
 
     def _export_csv(self) -> None:
+        if not can(self._role(), "export"):
+            return
         if not self.articles:
             return
         path = filedialog.asksaveasfilename(

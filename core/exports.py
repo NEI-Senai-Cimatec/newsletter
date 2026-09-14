@@ -8,6 +8,7 @@ import platform
 import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from core.scoring import area_of, relevance
 
@@ -24,8 +25,15 @@ except ImportError:  # pragma: no cover
     Document = None
 
 
-def build_newsletter(docs: list[dict], weights: dict, mode: str, meta: dict) -> dict:
-    ranked = sorted(docs, key=lambda d: relevance(d, weights), reverse=True)
+def build_newsletter(docs: list[dict], weights: dict, mode: str, meta: dict,
+                     preserve_order: bool = False) -> dict:
+    """Rank ``docs`` by relevance into newsletter sections.
+
+    With ``preserve_order=True`` the input order is kept as-is (used by
+    the Personalizado flow, whose modal order is authoritative).
+    """
+    ranked = list(docs) if preserve_order else sorted(
+        docs, key=lambda d: relevance(d, weights), reverse=True)
     sections = [{
         "title": d.get("newsletter") or d.get("title", ""),
         "summary": d.get("summary", ""),
@@ -45,13 +53,13 @@ def export_pdf(structure: dict, path: Path | str) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     styles = getSampleStyleSheet()
-    story = [Paragraph(structure["title"], styles["Title"]), Spacer(1, 12)]
+    story = [Paragraph(escape(structure["title"]), styles["Title"]), Spacer(1, 12)]
     for section in structure["sections"]:
-        story.append(Paragraph(f"{section['title']} — {section['area']}"
+        story.append(Paragraph(f"{escape(section['title'])} — {escape(section['area'])}"
                                f" ({section['relevance']})", styles["Heading2"]))
-        story.append(Paragraph(section["summary"], styles["BodyText"]))
+        story.append(Paragraph(escape(section["summary"]), styles["BodyText"]))
         for point in section["key_points"]:
-            story.append(Paragraph(f"• {point}", styles["BodyText"]))
+            story.append(Paragraph(f"• {escape(point)}", styles["BodyText"]))
         story.append(Spacer(1, 12))
     SimpleDocTemplate(str(target), pagesize=A4).build(story)
     return str(target)

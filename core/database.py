@@ -52,6 +52,10 @@ def _hash(password: str, salt_hex: str) -> str:
 def create_user(db_path: Path | str, username: str, name: str, org: str,
                 internal: bool, role: str, password: str,
                 created_by: str = "system", status: str = "ativo") -> int:
+    if not (username or "").strip():
+        raise ValueError("username must be non-empty")
+    if not (password or ""):
+        raise ValueError("password must be non-empty")
     if role not in ROLES:
         raise ValueError(f"role must be one of {ROLES}")
     if status not in STATUSES:
@@ -120,6 +124,8 @@ def list_users(db_path: Path | str) -> list[dict]:
 def bootstrap_admin(db_path: Path | str, name: str, username: str, password: str) -> str:
     init_db(db_path)
     with _connect(db_path) as conn:
+        # NOTA: verificação-then-inserção (TOCTOU) — assume processo único;
+        # o UNIQUE(username) continua valendo como salvaguarda concorrente.
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if count:
             raise ValueError("users table is not empty")
@@ -149,6 +155,17 @@ def reset_admin_via_recovery_code(db_path: Path | str, code: str, new_password: 
     with _connect(db_path) as conn:
         conn.execute("DELETE FROM meta WHERE key = 'admin_recovery'")
     return True
+
+
+def is_admin_user(db_path: Path | str, username: str) -> bool:
+    """Tell whether ``username`` belongs to an admin (for recovery gating)."""
+    if not (username or "").strip():
+        return False
+    init_db(db_path)
+    with _connect(db_path) as conn:
+        row = conn.execute("SELECT role FROM users WHERE username = ?",
+                           (username.strip(),)).fetchone()
+    return row is not None and row["role"] == "admin"
 
 
 def update_profile(db_path: Path | str, username: str, name: str, org: str) -> None:

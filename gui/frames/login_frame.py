@@ -2,7 +2,7 @@
 import customtkinter as ctk
 
 from core import database
-from core.database import DB_FILE
+from core.database import DB_FILE, is_admin_user
 
 
 class LoginFrame(ctk.CTkFrame):
@@ -50,9 +50,14 @@ class LoginFrame(ctk.CTkFrame):
         self.app.login(user)
 
     def _signup(self) -> None:
+        username = self.user_entry.get().strip()
+        password = self.pass_entry.get()
+        if not username or not password:
+            self._fail("Informe usuário e senha.")
+            return
         try:
-            database.create_user(DB_FILE, self.user_entry.get().strip(), self.user_entry.get().strip(),
-                                 "QuIIN", True, "basico", self.pass_entry.get(),
+            database.create_user(DB_FILE, username, username,
+                                 "QuIIN", True, "basico", password,
                                  created_by="signup", status="pendente")
         except ValueError:
             self._fail("Nome de usuário já existe.")
@@ -60,7 +65,65 @@ class LoginFrame(ctk.CTkFrame):
         self._fail("Conta criada. Aguarde aprovação de um administrador.")
 
     def _recovery(self) -> None:
-        self._fail("Contate um administrador para redefinir sua senha.")
+        username = self.user_entry.get().strip()
+        try:
+            admin = bool(username) and is_admin_user(DB_FILE, username)
+        except Exception:
+            admin = False
+        if not admin:
+            self._fail("Contate um administrador para redefinir sua senha.")
+            return
+        self._open_admin_recovery_dialog(username)
+
+    def _open_admin_recovery_dialog(self, username: str) -> None:
+        """Recuperação do admin via código de uso único + nova senha."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Recuperar administrador")
+        dialog.geometry("420x280")
+        try:
+            dialog.transient(self)
+            dialog.grab_set()
+        except Exception:
+            pass
+        ctk.CTkLabel(dialog,
+                     text=f"Código de recuperação para {username}:").pack(
+                         padx=20, pady=(12, 4))
+        code_entry = ctk.CTkEntry(dialog, placeholder_text="Código de recuperação")
+        code_entry.pack(padx=20, pady=4, fill="x")
+        ctk.CTkLabel(dialog, text="Nova senha:").pack(padx=20, pady=(8, 4))
+        new_pass_entry = ctk.CTkEntry(dialog, placeholder_text="Nova senha",
+                                      show="*")
+        new_pass_entry.pack(padx=20, pady=4, fill="x")
+        error = ctk.CTkLabel(dialog, text="")
+        error.pack(padx=20, pady=2)
+
+        def _confirm() -> None:
+            code = code_entry.get().strip()
+            new_password = new_pass_entry.get()
+            if not code or not new_password:
+                error.configure(text="Informe o código e a nova senha.")
+                return
+            try:
+                ok = database.reset_admin_via_recovery_code(
+                    DB_FILE, code, new_password)
+            except Exception as exc:
+                error.configure(text=f"Não foi possível redefinir: {exc}")
+                return
+            if not ok:
+                error.configure(text="Código inválido.")
+                return
+            try:
+                dialog.destroy()
+            except Exception:
+                pass
+            self._fail("Senha redefinida. Entre com a nova senha.")
+
+        row = ctk.CTkFrame(dialog, fg_color="transparent")
+        row.pack(padx=20, pady=10, fill="x")
+        ctk.CTkButton(row, text="Redefinir", command=_confirm).pack(
+            side="left", padx=(0, 8))
+        ctk.CTkButton(row, text="Cancelar", fg_color="transparent",
+                      command=dialog.destroy).pack(side="left")
 
     def _bootstrap_wizard(self) -> None:
         if (self._bootstrap_dialog is not None
@@ -75,6 +138,11 @@ class LoginFrame(ctk.CTkFrame):
         self._bootstrap_dialog = dialog
         dialog.title("Criar administrador inicial")
         dialog.geometry("420x360")
+        try:
+            dialog.transient(self)
+            dialog.grab_set()
+        except Exception:
+            pass
 
         def _on_close() -> None:
             self._bootstrap_dialog = None
@@ -106,6 +174,11 @@ class LoginFrame(ctk.CTkFrame):
             done = ctk.CTkToplevel(self)
             done.title("Guarde este código")
             done.geometry("460x200")
+            try:
+                done.transient(self)
+                done.grab_set()
+            except Exception:
+                pass
             ctk.CTkLabel(done, text="Código de recuperação (exibido uma única vez):").pack(padx=20, pady=8)
             ctk.CTkLabel(done, text=code, font=ctk.CTkFont(size=14, weight="bold")).pack(padx=20, pady=8)
             ctk.CTkLabel(done, text="Guarde em local seguro. Ele recupera o admin.").pack(padx=20, pady=8)

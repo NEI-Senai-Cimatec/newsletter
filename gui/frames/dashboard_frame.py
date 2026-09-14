@@ -344,8 +344,9 @@ class DashboardFrame(ctk.CTkFrame):
         try:
             monthly = repository.stats_monthly(docs, list(AREAS))
             share = repository.stats_area_share(docs)
-            if docs:
-                assert abs(sum(share.values()) - 100.0) < 0.6
+            if docs and abs(sum(share.values()) - 100.0) >= 0.6:
+                logger.warning("Participação por área fora do esperado: %s",
+                               share)
             countries = repository.stats_countries(docs)
             if sort_key == "relevance" and sum(weights.values()) <= 0:
                 ordered = list(docs)
@@ -361,6 +362,7 @@ class DashboardFrame(ctk.CTkFrame):
                        "total": len(ordered)}
         except Exception:
             logger.debug("Dashboard compute failed", exc_info=True)
+            self._notify("Falha ao atualizar o painel.")
             return
         self._ui_queue.put(("render", seq, payload))
 
@@ -675,22 +677,15 @@ class DashboardFrame(ctk.CTkFrame):
                 structure = build_newsletter(ranked, weights, mode,
                                              {"title": NEWSLETTER_TITLE})
             else:
+                # Personalizado: a ordem do modal é autoritativa —
+                # build_newsletter não reordena (preserve_order=True),
+                # o que também elimina a divergência em empates.
                 chosen = list(docs)
                 structure = build_newsletter(chosen, weights, mode,
-                                             {"title": NEWSLETTER_TITLE})
-                # build_newsletter ordena por relevância; o Personalizado
-                # preserva a ordem escolhida no modal (sort estável → inverte).
-                order = sorted(
-                    range(len(chosen)),
-                    key=lambda i: relevance(chosen[i], weights),
-                    reverse=True)
-                inv = [0] * len(chosen)
-                for pos, idx in enumerate(order):
-                    inv[idx] = pos
-                structure["sections"] = [structure["sections"][inv[i]]
-                                         for i in range(len(chosen))]
+                                             {"title": NEWSLETTER_TITLE},
+                                             preserve_order=True)
             suffix = Path(path).suffix.lower()
-            if suffix in (".docx", ".doc"):
+            if suffix == ".docx":
                 export_word(structure, path)
             else:
                 export_pdf(structure, path)

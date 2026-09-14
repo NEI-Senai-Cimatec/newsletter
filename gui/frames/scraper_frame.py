@@ -7,6 +7,7 @@ import time
 import customtkinter as ctk
 
 from core.api_client import APIClient
+from core.permissions import can
 from core.preflight import run_preflight_checks
 from core.task_runner import TaskRunner
 from gui.theme.colors import NORMAL_FONT, SECTION_FONT, STATUS_ERROR, STATUS_OK, STATUS_WARNING, TITLE_FONT
@@ -91,6 +92,29 @@ class ScraperFrame(ctk.CTkFrame):
         body.pack(fill="x", padx=0, pady=(0, 10))
         return outer, body
 
+    # -- role gating ----------------------------------------------------
+    def _role(self) -> str:
+        try:
+            return str((self.app.session or {}).get("role", "basico"))
+        except Exception:
+            return "basico"
+
+    def _gate_start(self, enabled: bool) -> None:
+        """Enable Start only with ``run_pipeline`` (tip via ``set_gated``)."""
+        allowed = bool(enabled) and can(self._role(), "run_pipeline")
+        try:
+            if hasattr(self.app, "set_gated"):
+                self.app.set_gated(self.start_button, allowed,
+                                   "Sem permissão: requer 'run_pipeline'.")
+                return
+        except Exception:
+            pass
+        try:
+            self.start_button.configure(
+                state="normal" if allowed else "disabled")
+        except Exception:
+            pass
+
     # -- lifecycle ------------------------------------------------------
     def on_show(self) -> None:
         """Reload options from config and re-run preflight."""
@@ -109,7 +133,7 @@ class ScraperFrame(ctk.CTkFrame):
         for child in self.preflight_box.winfo_children():
             child.destroy()
         ctk.CTkLabel(self.preflight_box, text="Verificando...").pack(anchor="w")
-        self.start_button.configure(state="disabled")
+        self._gate_start(False)
         thread = threading.Thread(target=self._preflight_worker, daemon=True)
         thread.start()
 
@@ -140,10 +164,12 @@ class ScraperFrame(ctk.CTkFrame):
             )
             row.pack(anchor="w", padx=4, pady=1)
         if self._preflight_ok and (self.runner is None or not self.runner.is_running):
-            self.start_button.configure(state="normal")
+            self._gate_start(True)
 
     # -- pipeline -------------------------------------------------------
     def _start_pipeline(self) -> None:
+        if not can(self._role(), "run_pipeline"):
+            return
         if not self._preflight_ok:
             return
         config = self.app.config
@@ -231,7 +257,7 @@ class ScraperFrame(ctk.CTkFrame):
             self.article_label.configure(text="")
             self.portal_label.configure(text=f"✅ {message}")
             self.results_button.configure(state="normal")
-            self.start_button.configure(state="normal")
+            self._gate_start(True)
         else:
             self.portal_label.configure(text=f"❌ {message}")
-            self.start_button.configure(state="normal")
+            self._gate_start(True)

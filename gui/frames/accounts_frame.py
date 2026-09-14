@@ -247,13 +247,25 @@ class AccountsFrame(ctk.CTkFrame):
             text=f"Acesso fornecido a {username} ({ROLE_LABELS[role]}).")
 
     def _approve(self, username: str) -> None:
-        database.set_status(DB_FILE, username, "ativo")
-        log_event(self.app.session["username"], "approve_user", username)
+        try:
+            database.set_status(DB_FILE, username, "ativo")
+        except Exception as exc:
+            logger.debug("set_status approve failed", exc_info=True)
+            self.status_label.configure(
+                text=f"Não foi possível aprovar {username}: {exc}")
+            return
+        log_event(self._current_user(), "approve_user", username)
         self.on_show()
 
     def _revoke(self, username: str) -> None:
-        database.set_status(DB_FILE, username, "revogado")
-        log_event(self.app.session["username"], "revoke_user", username)
+        try:
+            database.set_status(DB_FILE, username, "revogado")
+        except Exception as exc:
+            logger.debug("set_status revoke failed", exc_info=True)
+            self.status_label.configure(
+                text=f"Não foi possível cancelar o acesso de {username}: {exc}")
+            return
+        log_event(self._current_user(), "revoke_user", username)
         self.on_show()
 
     def _open_reset_dialog(self, username: str) -> None:
