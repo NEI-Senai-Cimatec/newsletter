@@ -18,9 +18,10 @@ import customtkinter as ctk
 from core import repository
 from core.audit import log_event
 from core.config_manager import PROVIDERS
-from core.exports import build_newsletter, export_pdf, print_pdf, share_package
+from core.exports import build_newsletter, export_pdf, export_word, print_pdf, share_package
 from core.repository import AREAS
 from core.scoring import INDICADORES, LABELS, load_weights, relevance, save_weights, validate_weights
+from gui.components.newsletter_dialog import open_newsletter_modal
 from gui.theme.colors import MONO_FONT, NORMAL_FONT, SECTION_FONT, SMALL_FONT, TITLE_FONT
 
 logger = logging.getLogger(__name__)
@@ -187,10 +188,10 @@ class DashboardFrame(ctk.CTkFrame):
         self.custom_button.pack(side="left", padx=8)
         share_row = ctk.CTkFrame(actions_outer, fg_color="transparent")
         share_row.pack(fill="x", padx=12, pady=(4, 10))
-        self.print_button = ctk.CTkButton(share_row, text="Print",
+        self.print_button = ctk.CTkButton(share_row, text="Imprimir",
                                           command=self._print_dashboard)
         self.print_button.pack(side="left", padx=(0, 8))
-        self.share_button = ctk.CTkButton(share_row, text="Share",
+        self.share_button = ctk.CTkButton(share_row, text="Compartilhar",
                                           command=self._share_dashboard)
         self.share_button.pack(side="left", padx=8)
 
@@ -606,17 +607,21 @@ class DashboardFrame(ctk.CTkFrame):
         except Exception:
             pass
 
-    # -- newsletter seam (Task 9 owns the flows) ------------------------
+    # -- newsletter (Automático / Personalizado) --------------------------
     def _newsletter_auto(self) -> None:
-        """Seam: automatic newsletter from the filtered top-20 (Task 9)."""
+        """Automático: top-20 por relevância sob filtros ativos → PDF/WORD."""
+        docs = self._effective_docs()
+        if not docs:
+            self._notify("Nenhum documento na visualização atual.")
+            return
         path = filedialog.asksaveasfilename(
-            title="Exportar newsletter (PDF)",
+            title="Exportar newsletter (Automático)",
             defaultextension=".pdf",
             initialfile="newsletter_quiin.pdf",
-            filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")])
+            filetypes=[("PDF", "*.pdf"), ("Word", "*.docx"),
+                       ("Todos", "*.*")])
         if not path:
             return
-        docs = self._effective_docs()
         weights = self._export_weights()
         thread = threading.Thread(target=self._newsletter_export_worker,
                                   args=(docs, weights, "automatico", path),
@@ -624,30 +629,71 @@ class DashboardFrame(ctk.CTkFrame):
         thread.start()
 
     def _newsletter_custom(self) -> None:
-        """Seam: personalized newsletter (Task 9 adds the modal)."""
+        """Personalizado: modal de seleção/ordenação → ordem do usuário."""
+        docs = self._effective_docs()
+        if not docs:
+            self._notify("Nenhum documento na visualização atual.")
+            return
+        weights = self._export_weights()
+        ranked = sorted(docs,
+                        key=lambda d: self._view_relevance(d, weights),
+                        reverse=True)
+        open_newsletter_modal(
+            self, ranked, weights, self._view_relevance,
+            lambda chosen, dialog, w=dict(weights):
+            self._confirm_newsletter_modal(chosen, dialog, w))
+
+    def _confirm_newsletter_modal(self, chosen: list, dialog,
+                                  weights: dict) -> None:
+        """Destino + worker do Personalizado (main thread; exporta no worker)."""
         path = filedialog.asksaveasfilename(
-            title="Exportar newsletter personalizada (PDF)",
+            parent=dialog,
+            title="Exportar newsletter personalizada",
             defaultextension=".pdf",
             initialfile="newsletter_personalizada.pdf",
-            filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")])
+            filetypes=[("PDF", "*.pdf"), ("Word", "*.docx"),
+                       ("Todos", "*.*")])
         if not path:
             return
-        docs = self._effective_docs()
-        weights = self._export_weights()
-        thread = threading.Thread(target=self._newsletter_export_worker,
-                                  args=(docs, weights, "personalizado", path),
-                                  daemon=True)
+        try:
+            dialog.destroy()
+        except Exception:
+            pass
+        thread = threading.Thread(
+            target=self._newsletter_export_worker,
+            args=(list(chosen), weights, "personalizado", path),
+            daemon=True)
         thread.start()
 
     def _newsletter_export_worker(self, docs: list, weights: dict,
                                   mode: str, path: str) -> None:
         try:
-            ranked = sorted(
-                docs, key=lambda d: self._view_relevance(d, weights),
-                reverse=True)[:20]
-            structure = build_newsletter(ranked, weights, mode,
-                                         {"title": NEWSLETTER_TITLE})
-            export_pdf(structure, path)
+            if mode == "automatico":
+                ranked = sorted(
+                    docs, key=lambda d: self._view_relevance(d, weights),
+                    reverse=True)[:20]
+                structure = build_newsletter(ranked, weights, mode,
+                                             {"title": NEWSLETTER_TITLE})
+            else:
+                chosen = list(docs)
+                structure = build_newsletter(chosen, weights, mode,
+                                             {"title": NEWSLETTER_TITLE})
+                # build_newsletter ordena por relevância; o Personalizado
+                # preserva a ordem escolhida no modal (sort estável → inverte).
+                order = sorted(
+                    range(len(chosen)),
+                    key=lambda i: relevance(chosen[i], weights),
+                    reverse=True)
+                inv = [0] * len(chosen)
+                for pos, idx in enumerate(order):
+                    inv[idx] = pos
+                structure["sections"] = [structure["sections"][inv[i]]
+                                         for i in range(len(chosen))]
+            suffix = Path(path).suffix.lower()
+            if suffix in (".docx", ".doc"):
+                export_word(structure, path)
+            else:
+                export_pdf(structure, path)
             log_event(self._current_user(), "generate_newsletter",
                       f"modo={mode} documentos={len(structure['sections'])}")
             self._notify(f"Newsletter ({mode}) exportada para {path}.")
