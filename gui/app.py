@@ -32,6 +32,12 @@ HYBRID_NAV = [
     ("settings", "⚙️ Configurações"),
 ]
 
+# Allowlist copy for App.session (defense in depth: never store password_hash/salt).
+SESSION_KEYS = ("id", "username", "name", "org", "internal", "role",
+                "status", "created_at", "created_by")
+
+SEARCH_DEBOUNCE_MS = 200
+
 
 class _PlaceholderFrame(ctk.CTkFrame):
     """Stand-in for a future QuIIN module (dashboard/documents/accounts).
@@ -84,6 +90,11 @@ class App(ctk.CTk):
 
         self.session: dict | None = None
         self.search_results: list = []
+        self._cached_docs: list = []
+        self._search_after: str | None = None
+        self._export_registry: list = []
+        self._gated_prev: dict = {}
+        self._gated_bound_tip: dict = {}
 
         self.progress_queue: queue.Queue = queue.Queue()
         self.log_queue: queue.Queue = queue.Queue()
@@ -134,13 +145,14 @@ class App(ctk.CTk):
 
     # -- session ------------------------------------------------------
     def login(self, user: dict) -> None:
-        self.session = user
+        self.session = {k: user.get(k) for k in SESSION_KEYS if k in user}
         self._rebuild_frames()
         self.show_frame("dashboard")
 
     def logout(self) -> None:
         self.session = None
         self.search_results = []
+        self._cached_docs = []
         self._rebuild_frames()
         self.show_frame("login")
 
@@ -154,10 +166,76 @@ class App(ctk.CTk):
         role = (self.session or {}).get("role", "basico")
         return can(role, capability)
 
+    def set_gated(self, widget, allowed: bool, denied_tip: str) -> None:
+        """Disable ``widget`` when not ``allowed``; hover shows ``denied_tip``.
+
+        Status-bar approach (no third-party tooltip dependency): binds
+        ``<Enter>``/``<Leave>`` to display the denial reason in the shell's
+        own ``StatusBar`` while hovering a disabled export button.
+        Tasks 8/9 MUST reuse this helper for PDF/WORD/Print/Share buttons.
+        """
+        try:
+            widget.configure(state="normal" if allowed else "disabled")
+        except Exception:  # never break frame build on gating
+            logger.debug("Gating skip: configure", exc_info=True)
+            return
+        key = id(widget)
+        if allowed:
+            self._gated_prev.pop(key, None)
+            self._gated_bound_tip.pop(key, None)
+            try:
+                widget.unbind("<Enter>")
+                widget.unbind("<Leave>")
+            except Exception:
+                pass
+            return
+        self._gated_prev[key] = denied_tip
+
+        def _on_enter(_event=None, _w=widget, _tip=denied_tip) -> None:
+            try:
+                _w._gated_saved = self.status_bar.status_label.cget("text")
+            except Exception:
+                pass
+            self.status_bar.set_status(_tip)
+
+        def _on_leave(_event=None, _w=widget) -> None:
+            try:
+                prev = getattr(_w, "_gated_saved", "Pronto")
+            except Exception:
+                prev = "Pronto"
+            self.status_bar.set_status(prev)
+
+        try:
+            if self._gated_bound_tip.get(key) != denied_tip:
+                try:
+                    widget.unbind("<Enter>")
+                    widget.unbind("<Leave>")
+                except Exception:
+                    pass
+                widget.bind("<Enter>", _on_enter)
+                widget.bind("<Leave>", _on_leave)
+                self._gated_bound_tip[key] = denied_tip
+        except Exception:
+            logger.debug("Gating skip: bind", exc_info=True)
+
+    def register_export_button(self, frame_name: str, widget, capability: str) -> None:
+        """Register an export-capable button for capability gating.
+
+        Tasks 8/9 MUST reuse this registry (do not invent a second
+        mechanism). ``capability`` is checked via ``has_capability()`` /
+        ``core.permissions.can()``. Gating is applied immediately and
+        re-applied after every ``show_frame``.
+        """
+        self._export_registry = [e for e in self._export_registry if e[1] is not widget]
+        self._export_registry.append((frame_name, widget, capability))
+        self.set_gated(widget, self.has_capability(capability),
+                       f"Sem permissão: requer '{capability}'.")
+
     def _rebuild_frames(self) -> None:
         """Recreate content frames and refresh sidebar/header for the session."""
         for child in self.container.winfo_children():
             child.destroy()
+        self._export_registry = []
         self.frames = {
             "login": LoginFrame(self.container, self),
             "home": HomeFrame(self.container, self),
@@ -182,8 +260,17 @@ class App(ctk.CTk):
             self.id_label.configure(text="")
             self.search_entry.configure(state="disabled")
             self.logout_button.configure(state="disabled")
+            self._cached_docs = []
         else:
+            # Re-pack shell in creation order so the sidebar stays leftmost
+            # across logout→login→logout→login cycles (pack_forget + pack
+            # would otherwise move the sidebar to the end of pack order).
+            for shell in (self.sidebar, self.header, self.status_bar, self.container):
+                shell.pack_forget()
             self.sidebar.pack(side="left", fill="y")
+            self.header.pack(side="top", fill="x")
+            self.status_bar.pack(side="bottom", fill="x")
+            self.container.pack(side="left", fill="both", expand=True)
             self.sidebar.set_items(self._visible_nav())
             self.welcome_label.configure(
                 text=f"Bem vindo, {self.session.get('name', '')}")
@@ -191,43 +278,62 @@ class App(ctk.CTk):
             self.id_label.configure(text=f"ID: {self.session.get('id', '')}")
             self.search_entry.configure(state="normal")
             self.logout_button.configure(state="normal")
+            self.refresh_documents()
         self._current = None
         self._apply_export_gating()
 
     def _apply_export_gating(self) -> None:
-        """Disable export-capable buttons the session role may not use.
-
-        Current frames expose no export button handles, so this is a no-op
-        today; Tasks 8/9 own the PDF/WORD/Print/Share buttons and reuse
-        ``has_capability`` + this hook. Kept here so ``can()`` wiring is
-        live and covered from the shell.
-        """
-        capability_by_hint = (
-            ("pdf", "export"), ("word", "export"), ("csv", "export"),
-            ("print", "print"), ("share", "share"), ("export", "export"),
-        )
-        for frame in self.frames.values():
-            for attr in list(vars(frame)):
-                hint = attr.lower()
-                for needle, capability in capability_by_hint:
-                    if needle in hint:
-                        widget = getattr(frame, attr, None)
-                        if hasattr(widget, "configure") and not self.has_capability(capability):
-                            try:
-                                widget.configure(state="disabled")
-                            except Exception:  # never break frame build on gating
-                                logger.debug("Gating skip: %s", attr)
+        """Apply capability gating to all registered export buttons."""
+        for _frame_name, widget, capability in list(self._export_registry):
+            try:
+                if widget.winfo_exists():
+                    self.set_gated(widget, self.has_capability(capability),
+                                   f"Sem permissão: requer '{capability}'.")
+            except Exception:
+                logger.debug("Gating skip: registry entry", exc_info=True)
 
     # -- global search ------------------------------------------------
+    def _load_documents_safe(self) -> list:
+        """Load documents JSON defensively; ``[]`` on missing/corrupt data."""
+        try:
+            docs = repository.load_documents(DOCUMENTS_JSON)
+            return list(docs) if isinstance(docs, list) else []
+        except Exception:
+            logger.debug("Search docs unavailable", exc_info=True)
+            return []
+
+    def refresh_documents(self) -> None:
+        """Reload the cached document list (login/rebuild + explicit refresh)."""
+        self._cached_docs = self._load_documents_safe()
+
     def _on_search(self, _event=None) -> None:
-        text = self.search_entry.get()
-        loaded_docs = repository.load_documents(DOCUMENTS_JSON)
-        filtered = repository.search(loaded_docs, text)
+        if self._search_after is not None:
+            try:
+                self.after_cancel(self._search_after)
+            except Exception:
+                pass
+            self._search_after = None
+        self._search_after = self.after(SEARCH_DEBOUNCE_MS, self._do_search)
+
+    def _do_search(self) -> None:
+        self._search_after = None
+        try:
+            text = self.search_entry.get()
+        except Exception:
+            text = ""
+        try:
+            filtered = repository.search(self._cached_docs, text)
+        except Exception:
+            logger.debug("Search failed", exc_info=True)
+            filtered = []
         self.search_results = filtered
         for key in ("dashboard", "documents"):
             frame = self.frames.get(key)
             if frame is not None and hasattr(frame, "apply_search"):
-                frame.apply_search(filtered)
+                try:
+                    frame.apply_search(filtered)
+                except Exception:
+                    logger.debug("apply_search skip: %s", key, exc_info=True)
 
     def show_frame(self, frame_name: str) -> None:
         """Display ``frame_name``; the previous frame auto-saves via on_hide."""
@@ -247,6 +353,7 @@ class App(ctk.CTk):
             self.sidebar.set_active(frame_name)
         if hasattr(frame, "on_show"):
             frame.on_show()
+        self._apply_export_gating()
 
     def save_config(self) -> None:
         """Persist the in-memory config to disk."""

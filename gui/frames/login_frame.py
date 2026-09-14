@@ -11,6 +11,7 @@ class LoginFrame(ctk.CTkFrame):
     def __init__(self, master, app) -> None:
         super().__init__(master, fg_color="transparent")
         self.app = app
+        self._bootstrap_dialog = None
         ctk.CTkLabel(self, text="GLOBAL QUANTUM INTELLIGENCE",
                      font=ctk.CTkFont(size=22, weight="bold")).pack(pady=(32, 4))
         ctk.CTkLabel(self, text="Centro de Competências EMBRAPII CIMATEC em Tecnologias Quânticas").pack()
@@ -62,9 +63,30 @@ class LoginFrame(ctk.CTkFrame):
         self._fail("Contate um administrador para redefinir sua senha.")
 
     def _bootstrap_wizard(self) -> None:
+        if (self._bootstrap_dialog is not None
+                and self._bootstrap_dialog.winfo_exists()):
+            try:
+                self._bootstrap_dialog.lift()
+                self._bootstrap_dialog.focus_force()
+            except Exception:
+                pass
+            return
         dialog = ctk.CTkToplevel(self)
+        self._bootstrap_dialog = dialog
         dialog.title("Criar administrador inicial")
         dialog.geometry("420x360")
+
+        def _on_close() -> None:
+            self._bootstrap_dialog = None
+            try:
+                dialog.destroy()
+            except Exception:
+                pass
+
+        try:
+            dialog.protocol("WM_DELETE_WINDOW", _on_close)
+        except Exception:
+            pass
         name = ctk.CTkEntry(dialog, placeholder_text="Nome completo")
         name.pack(padx=20, pady=8, fill="x")
         username = ctk.CTkEntry(dialog, placeholder_text="Usuário")
@@ -73,8 +95,13 @@ class LoginFrame(ctk.CTkFrame):
         password.pack(padx=20, pady=8, fill="x")
 
         def _create() -> None:
-            code = database.bootstrap_admin(DB_FILE, name.get().strip(),
-                                            username.get().strip(), password.get())
+            try:
+                code = database.bootstrap_admin(DB_FILE, name.get().strip(),
+                                                username.get().strip(), password.get())
+            except ValueError as exc:
+                self._fail(str(exc))
+                return
+            self._bootstrap_dialog = None
             dialog.destroy()
             done = ctk.CTkToplevel(self)
             done.title("Guarde este código")
