@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import os
+import hmac
 import secrets
 import sqlite3
 from datetime import datetime, timezone
@@ -81,14 +81,17 @@ def authenticate(db_path: Path | str, username: str, password: str) -> dict | No
     if row is None:
         return None
     user = dict(row)
-    if _hash(password, user["salt"]) != user["password_hash"]:
+    if not hmac.compare_digest(_hash(password, user["salt"]), user["password_hash"]):
         return None
+    user.pop("password_hash", None)
+    user.pop("salt", None)
     return user
 
 
 def set_status(db_path: Path | str, username: str, status: str) -> None:
     if status not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
+    init_db(db_path)
     with _connect(db_path) as conn:
         cursor = conn.execute("UPDATE users SET status = ? WHERE username = ?",
                               (status, username))
@@ -97,6 +100,7 @@ def set_status(db_path: Path | str, username: str, status: str) -> None:
 
 
 def set_password(db_path: Path | str, username: str, new_password: str) -> None:
+    init_db(db_path)
     salt = secrets.token_hex(16)
     with _connect(db_path) as conn:
         cursor = conn.execute("UPDATE users SET password_hash = ?, salt = ? WHERE username = ?",
@@ -133,11 +137,15 @@ def reset_admin_via_recovery_code(db_path: Path | str, code: str, new_password: 
     code_hash = hashlib.sha256(code.encode()).hexdigest()
     with _connect(db_path) as conn:
         row = conn.execute("SELECT value FROM meta WHERE key = 'admin_recovery'").fetchone()
-        if row is None or row["value"] != code_hash:
+        if row is None:
+            return False
+        if not hmac.compare_digest(row["value"], code_hash):
             return False
         admin = conn.execute("SELECT username FROM users WHERE role = 'admin'"
                              " ORDER BY id LIMIT 1").fetchone()
         if admin is None:
             return False
     set_password(db_path, admin["username"], new_password)
+    with _connect(db_path) as conn:
+        conn.execute("DELETE FROM meta WHERE key = 'admin_recovery'")
     return True
