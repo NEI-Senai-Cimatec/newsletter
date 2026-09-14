@@ -1,14 +1,24 @@
 # gui/frames/settings_frame.py
 """Provider, model, portal, and LLM-parameter configuration screen."""
+import logging
 import queue
+import sqlite3
 import threading
 import webbrowser
 
 import customtkinter as ctk
 
+from core import database
 from core.api_client import APIClient
+from core.audit import log_event
 from core.config_manager import PROVIDERS
+from core.database import DB_FILE
+from core.permissions import can
+from core.scoring import (DEFAULT_WEIGHTS, INDICADORES, LABELS, load_weights,
+                          save_weights, validate_weights)
 from gui.theme.colors import NORMAL_FONT, SECTION_FONT, SMALL_FONT, TITLE_FONT
+
+logger = logging.getLogger(__name__)
 
 PORTAL_LABELS = [
     ("thequantuminsider", "The Quantum Insider"),
@@ -16,6 +26,17 @@ PORTAL_LABELS = [
     ("quantumzeitgeist", "Quantum Zeitgeist"),
     ("insidequantumtechnology", "Inside Quantum Technology"),
 ]
+
+SOBRE_LINES = (
+    "Nome: GLOBAL QUANTUM INTELLIGENCE – QuIIN",
+    "Criação: 27/04/2025",
+    "Publicação: 09/05/2025",
+    "Linguagem: Python (web scraping, PLN e automação de relatórios)",
+    "Campo: IF01 – Informação científica, tecnológica, bibliográfica e estratégica",
+    "Tipo: IA01 – Inteligência Artificial / GI01 – Gerenciador de Informações",
+    "Proprietário: Quantum Industrial Innovation",
+    "Autores: Mabel Diz Marques Mota / João Carlos Passos / Alexandre de Santa Barbara",
+)
 
 
 class SettingsFrame(ctk.CTkFrame):
@@ -32,6 +53,28 @@ class SettingsFrame(ctk.CTkFrame):
 
         scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        self._ai_widgets: list = []
+        self._pipeline_widgets: list = []
+
+        # ---- Perfil ----
+        _perfil_outer, perfil_box = self._section(scroll, "Perfil")
+        ctk.CTkLabel(perfil_box, text="Nome:",
+                     font=ctk.CTkFont(**NORMAL_FONT)).grid(row=0, column=0, sticky="w",
+                                                           padx=12, pady=8)
+        self.profile_name_entry = ctk.CTkEntry(perfil_box, width=320,
+                                               placeholder_text="Nome completo")
+        self.profile_name_entry.grid(row=0, column=1, sticky="ew", padx=12, pady=8)
+        ctk.CTkLabel(perfil_box, text="Organização:",
+                     font=ctk.CTkFont(**NORMAL_FONT)).grid(row=1, column=0, sticky="w",
+                                                           padx=12, pady=8)
+        self.profile_org_entry = ctk.CTkEntry(perfil_box, width=320,
+                                              placeholder_text="Organização")
+        self.profile_org_entry.grid(row=1, column=1, sticky="ew", padx=12, pady=8)
+        self.profile_status = ctk.CTkLabel(perfil_box, text="",
+                                           font=ctk.CTkFont(**SMALL_FONT))
+        self.profile_status.grid(row=2, column=1, sticky="w", padx=12, pady=(0, 4))
+        perfil_box.columnconfigure(1, weight=1)
 
         # ---- Provider section ----
         _provider_outer, provider_box = self._section(scroll, "Provedor de IA")
@@ -55,10 +98,12 @@ class SettingsFrame(ctk.CTkFrame):
         self.key_visible = False
         self.key_entry = ctk.CTkEntry(key_row, show="•")
         self.key_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        ctk.CTkButton(key_row, text="👁", width=40,
-                      command=self._toggle_key).grid(row=0, column=1, padx=(0, 6))
-        ctk.CTkButton(key_row, text="Salvar", width=70,
-                      command=self._save_key).grid(row=0, column=2)
+        self.key_toggle_button = ctk.CTkButton(key_row, text="👁", width=40,
+                                              command=self._toggle_key)
+        self.key_toggle_button.grid(row=0, column=1, padx=(0, 6))
+        self.key_save_button = ctk.CTkButton(key_row, text="Salvar", width=70,
+                                             command=self._save_key)
+        self.key_save_button.grid(row=0, column=2)
 
         ctk.CTkLabel(provider_box, text="Modelo:",
                      font=ctk.CTkFont(**NORMAL_FONT)).grid(row=2, column=0, sticky="w",
@@ -96,11 +141,13 @@ class SettingsFrame(ctk.CTkFrame):
         # ---- Portals ----
         _portals_outer, portals_box = self._section(scroll, "Portais de Notícias")
         self.portal_vars: dict[str, ctk.BooleanVar] = {}
+        self.portal_boxes: list = []
         for i, (key, label) in enumerate(PORTAL_LABELS):
             var = ctk.BooleanVar(value=False)
-            ctk.CTkCheckBox(portals_box, text=label, variable=var).grid(
-                row=i, column=0, sticky="w", padx=12, pady=4)
+            box = ctk.CTkCheckBox(portals_box, text=label, variable=var)
+            box.grid(row=i, column=0, sticky="w", padx=12, pady=4)
             self.portal_vars[key] = var
+            self.portal_boxes.append(box)
 
         # ---- LLM parameters ----
         _llm_outer, llm_box = self._section(scroll, "Parâmetros do LLM")
@@ -146,6 +193,41 @@ class SettingsFrame(ctk.CTkFrame):
                                            placeholder_text="AAAA-MM-DD (vazio = tudo)")
         self.min_date_entry.grid(row=0, column=1, sticky="w", padx=12, pady=8)
 
+        # ---- Índice multicritério (mesmo editor do dashboard) ----
+        _weights_outer, weights_box = self._section(scroll, "Índice multicritério")
+        self.weights_edit_button = ctk.CTkButton(weights_box, text="Editar",
+                                                 width=90,
+                                                 command=self._edit_weights)
+        self.weights_edit_button.grid(row=0, column=2, padx=12, pady=4,
+                                       sticky="e")
+        self._weights: dict = load_weights()
+        self.weight_labels: dict[str, ctk.CTkLabel] = {}
+        for i, key in enumerate(INDICADORES, start=1):
+            row_label = ctk.CTkLabel(weights_box, text="",
+                                     font=ctk.CTkFont(**NORMAL_FONT))
+            row_label.grid(row=i, column=0, columnspan=3, sticky="w",
+                           padx=12, pady=1)
+            self.weight_labels[key] = row_label
+        self._refresh_weight_labels()
+
+        # ---- Sobre / Registro do Software ----
+        _sobre_outer, sobre_box = self._section(scroll, "Sobre / Registro do Software")
+        for line in SOBRE_LINES:
+            ctk.CTkLabel(sobre_box, text=line,
+                         font=ctk.CTkFont(**NORMAL_FONT),
+                         wraplength=640, justify="left").pack(anchor="w",
+                                                              padx=12, pady=1)
+
+        # Registra os widgets gated APÓS criar todas as seções (o bloco de
+        # IA acima permanece intacto; só ganhou referências nomeadas).
+        self._ai_widgets = [self.provider_menu, self.key_entry,
+                            self.key_toggle_button, self.key_save_button,
+                            self.model_combo, self.docs_button,
+                            self.test_button, self.endpoint_entry]
+        self._pipeline_widgets = [*self.portal_boxes,
+                                  self.max_tokens_entry, self.temp_slider,
+                                  self.top_p_slider, self.min_date_entry]
+
         ctk.CTkButton(self, text="💾 Salvar configurações",
                       command=self.save).pack(pady=(0, 16))
 
@@ -169,7 +251,9 @@ class SettingsFrame(ctk.CTkFrame):
     def on_show(self) -> None:
         """Load widgets from the current config (and stored API key)."""
         self._load_from_config()
+        self._apply_role_gating()
         self.test_label.configure(text="")
+        self.profile_status.configure(text="")
 
     def on_hide(self) -> None:
         """Auto-save when leaving the screen."""
@@ -213,6 +297,14 @@ class SettingsFrame(ctk.CTkFrame):
         self.min_date_entry.delete(0, "end")
         self.min_date_entry.insert(0, config.get("scraper_settings", {}).get("min_date", ""))
 
+        try:
+            self._weights = load_weights()
+        except Exception:
+            logger.debug("load_weights failed", exc_info=True)
+            self._weights = dict(DEFAULT_WEIGHTS)
+        self._refresh_weight_labels()
+        self._load_profile()
+
     def save(self, silent: bool = False) -> None:
         """Persist widgets to config (API key saved separately via Salvar)."""
         config = self.app.config
@@ -231,10 +323,185 @@ class SettingsFrame(ctk.CTkFrame):
         config["llm_settings"]["temperature"] = round(float(self.temp_var.get()), 2)
         config["llm_settings"]["top_p"] = round(float(self.top_p_var.get()), 2)
         config["scraper_settings"]["min_date"] = self.min_date_entry.get().strip()
+        self._save_profile()
         self.app.save_config()
         self.app.refresh_provider_status()
         if not silent:
             self.test_label.configure(text="✅ Configurações salvas.")
+
+    # -- gating + perfil + pesos ---------------------------------------
+    def _current_user(self) -> str:
+        try:
+            return str((self.app.session or {}).get("username", ""))
+        except Exception:
+            return ""
+
+    def _current_role(self) -> str:
+        try:
+            return str((self.app.session or {}).get("role", "basico"))
+        except Exception:
+            return "basico"
+
+    def _gate(self, widget, allowed: bool, denied_tip: str) -> None:
+        """Disable ``widget`` when not ``allowed`` (reuse shell helper)."""
+        try:
+            if hasattr(self.app, "set_gated"):
+                self.app.set_gated(widget, allowed, denied_tip)
+            else:
+                widget.configure(state="normal" if allowed else "disabled")
+        except Exception:
+            logger.debug("Gating skip", exc_info=True)
+
+    def _apply_role_gating(self) -> None:
+        """Gate AI/pipeline/weights controls by the session role."""
+        role = self._current_role()
+        ai_ok = can(role, "configure_ai")
+        pipe_ok = can(role, "run_pipeline")
+        for widget in self._ai_widgets:
+            self._gate(widget, ai_ok, "Sem permissão: requer 'configure_ai'.")
+        for widget in self._pipeline_widgets:
+            self._gate(widget, pipe_ok, "Sem permissão: requer 'run_pipeline'.")
+        self._gate(self.weights_edit_button, can(role, "edit_weights"),
+                   "Sem permissão: requer 'edit_weights'.")
+        # O bloco de endpoint personalizado só faz sentido com IA liberada.
+        try:
+            if not ai_ok:
+                self.custom_box.pack_forget()
+            elif self._current_provider_key() == "custom":
+                self.custom_box.pack(fill="x", padx=8, pady=8)
+        except Exception:
+            logger.debug("Custom box gating skip", exc_info=True)
+
+    def _load_profile(self) -> None:
+        """Fill Perfil entries from ``users.db`` for the logged user."""
+        username = self._current_user()
+        name, org = "", ""
+        if username:
+            try:
+                for user in database.list_users(DB_FILE):
+                    if user.get("username") == username:
+                        name = user.get("name", "") or ""
+                        org = user.get("org", "") or ""
+                        break
+            except Exception:
+                logger.debug("Profile load failed", exc_info=True)
+        for entry, value in ((self.profile_name_entry, name),
+                             (self.profile_org_entry, org)):
+            try:
+                entry.delete(0, "end")
+                entry.insert(0, value)
+            except Exception:
+                logger.debug("Profile fill failed", exc_info=True)
+
+    def _save_profile(self) -> None:
+        """Persist Perfil entries to ``users.db`` for the logged user."""
+        username = self._current_user()
+        if not username:
+            return
+        try:
+            name = self.profile_name_entry.get().strip()
+            org = self.profile_org_entry.get().strip()
+        except Exception:
+            return
+        if not name:
+            return
+        try:
+            current = {}
+            for user in database.list_users(DB_FILE):
+                if user.get("username") == username:
+                    current = user
+                    break
+            if (current.get("name", "") or "") == name and (
+                    current.get("org", "") or "") == org:
+                return
+            database.init_db(DB_FILE)
+            with sqlite3.connect(str(DB_FILE)) as conn:
+                conn.execute("UPDATE users SET name = ?, org = ? WHERE username = ?",
+                             (name, org, username))
+            try:
+                self.app.session["name"] = name
+                self.app.session["org"] = org
+                self.app.welcome_label.configure(text=f"Bem vindo, {name}")
+                self.app.org_label.configure(text=str(org))
+            except Exception:
+                pass
+            log_event(username, "update_profile", f"nome={name} org={org}")
+            self.profile_status.configure(text="✅ Perfil salvo.")
+        except Exception as exc:
+            logger.debug("Profile save failed", exc_info=True)
+            try:
+                self.profile_status.configure(
+                    text=f"Não foi possível salvar o perfil: {exc}")
+            except Exception:
+                pass
+
+    def _refresh_weight_labels(self) -> None:
+        for key in INDICADORES:
+            try:
+                self.weight_labels[key].configure(
+                    text=f"{LABELS[key]}: {self._weights.get(key, 0)}")
+            except Exception:
+                logger.debug("Weight label skip", exc_info=True)
+
+    def _edit_weights(self) -> None:
+        if not can(self._current_role(), "edit_weights"):
+            return
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Editar pesos")
+        dialog.geometry("460x340")
+        ctk.CTkLabel(dialog, text="Índice de seleção multicritério",
+                     font=ctk.CTkFont(**SECTION_FONT)).pack(padx=20, pady=(12, 4))
+        entries: dict[str, ctk.CTkEntry] = {}
+        for key in INDICADORES:
+            ctk.CTkLabel(dialog, text=LABELS[key]).pack(anchor="w", padx=20)
+            entry = ctk.CTkEntry(dialog)
+            entry.insert(0, str(self._weights.get(key, 0)))
+            entry.pack(padx=20, pady=(0, 6), fill="x")
+            entries[key] = entry
+        error = ctk.CTkLabel(dialog, text="", text_color="#F85149")
+        error.pack(padx=20, pady=2)
+
+        def _save() -> None:
+            try:
+                candidate = {}
+                for key, entry in entries.items():
+                    raw = entry.get().strip()
+                    value = int(raw)
+                    if not 0 <= value <= 100:
+                        raise ValueError("range")
+                    candidate[key] = value
+                validate_weights(candidate)
+            except (ValueError, AttributeError):
+                total = 0
+                try:
+                    total = sum(int(e.get().strip()) for e in entries.values())
+                except (ValueError, AttributeError):
+                    error.configure(
+                        text="Pesos devem ser números inteiros de 0 a 100.")
+                    return
+                error.configure(
+                    text=f"A soma dos pesos deve ser 100 (atual: {total}).")
+                return
+            try:
+                save_weights(candidate)
+                log_event(self._current_user(), "edit_weights",
+                          f"pesos={candidate}")
+            except (OSError, ValueError) as exc:
+                error.configure(text=f"Não foi possível salvar: {exc}")
+                return
+            self._weights = dict(candidate)
+            self._refresh_weight_labels()
+            try:
+                dialog.destroy()
+            except Exception:
+                pass
+
+        row = ctk.CTkFrame(dialog, fg_color="transparent")
+        row.pack(padx=20, pady=10, fill="x")
+        ctk.CTkButton(row, text="Salvar", command=_save).pack(side="left",
+                                                              padx=(0, 8))
+        ctk.CTkButton(row, text="Cancelar", fg_color="transparent",
+                      command=dialog.destroy).pack(side="left")
 
     # -- provider widgets -----------------------------------------------
     def _on_provider_change(self, _name: str) -> None:

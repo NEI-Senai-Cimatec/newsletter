@@ -12,6 +12,7 @@ from core.task_runner import QueueHandler
 from core.utils import DOCUMENTS_JSON
 from gui.components.sidebar import Sidebar
 from gui.components.status_bar import StatusBar
+from gui.frames.accounts_frame import AccountsFrame
 from gui.frames.dashboard_frame import DashboardFrame
 from gui.frames.documents_frame import DocumentsFrame
 from gui.frames.home_frame import HomeFrame
@@ -39,35 +40,6 @@ SESSION_KEYS = ("id", "username", "name", "org", "internal", "role",
                 "status", "created_at", "created_by")
 
 SEARCH_DEBOUNCE_MS = 200
-
-
-class _PlaceholderFrame(ctk.CTkFrame):
-    """Stand-in for a future QuIIN module (accounts).
-
-    Task 11 replaces this placeholder with the real frame. The stub
-    honors the established frame contract (``__init__(master, app)``,
-    ``on_show``) plus ``apply_search`` so the header global search can
-    forward filtered lists without crashing.
-    """
-
-    def __init__(self, master, app, title: str, note: str) -> None:
-        super().__init__(master, fg_color="transparent")
-        self.app = app
-        self._docs: list = []
-        ctk.CTkLabel(self, text=title,
-                     font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(24, 4))
-        ctk.CTkLabel(self, text=note).pack(pady=(0, 12))
-        self.count_label = ctk.CTkLabel(self, text="")
-        self.count_label.pack(pady=8)
-
-    def on_show(self) -> None:
-        total = len(self._docs) if self._docs else 0
-        self.count_label.configure(
-            text=f"{total} documento(s) na busca atual." if self._docs else "")
-
-    def apply_search(self, docs: list) -> None:
-        self._docs = list(docs)
-        self.count_label.configure(text=f"{len(self._docs)} documento(s) na busca atual.")
 
 
 class App(ctk.CTk):
@@ -247,9 +219,7 @@ class App(ctk.CTk):
             "scraper": ScraperFrame(self.container, self),
             "results": ResultsFrame(self.container, self),
             "logs": LogFrame(self.container, self),
-            "accounts": _PlaceholderFrame(
-                self.container, self, "👥 Contas",
-                "Módulo Contas em construção (FASE 6, visível só para admin)."),
+            "accounts": AccountsFrame(self.container, self),
         }
         if self.session is None:
             self.sidebar.pack_forget()
