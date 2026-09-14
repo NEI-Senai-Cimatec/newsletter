@@ -5,11 +5,16 @@ CustomTkinter's ``dark-blue`` theme renders the base widgets; this module
 only centralizes the few values the app sets explicitly.
 """
 
-APP_TITLE = "Newsletter Tool — Processamento de Notícias"
+APP_TITLE = "GLOBAL QUANTUM INTELLIGENCE – QuIIN"
 APP_GEOMETRY = "1100x700"
 APP_MINSIZE = (900, 600)
 APPEARANCE_MODE = "dark"
 COLOR_THEME = "dark-blue"
+
+QUIIN_PRIMARY = "#1F4E79"
+QUIIN_LIGHT = "#2E75B6"
+QUIIN_ACCENT = "#9DC3E6"
+QUIIN_BG = "#101418"
 
 SIDEBAR_WIDTH = 220
 STATUS_BAR_HEIGHT = 28
