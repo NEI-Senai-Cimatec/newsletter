@@ -1,79 +1,64 @@
-# Ferramenta de Processamento de Notícias - Newsletter
+# GLOBAL QUANTUM INTELLIGENCE – QuIIN
 
-### Guia de Operação
+`GLOBAL QUANTUM INTELLIGENCE – QuIIN` · Centro de Competências EMBRAPII CIMATEC em Tecnologias Quânticas · Quantum Industrial Innovation – QuIIN Associação Tecnológica
 
-Este documento descreve o funcionamento da Ferramenta de Processamento de Notícias (Newsletter) e serve como guia de referência para novos operadores responsáveis por sua execução.
+## 1. Visão geral do produto
 
----
+O QuIIN é um aplicativo desktop (CustomTkinter) que coleta notícias de portais quânticos via pipeline de scraping + IA e as transforma em inteligência acionável: dashboard analítico com índice de relevância multicritério, documentos pesquisáveis e paginados, geração de newsletter com exportações PDF/WORD, impressão e compartilhamento — tudo com login, papéis (básico/premium/admin) e auditoria, sem exigir permissão de administrador da máquina.
 
-## 1. Visão Geral
+Uso típico: o admin configura o provedor de IA e executa o pipeline; a equipe navega no Dashboard, ajusta os pesos do índice, gera a newsletter e exporta; contas e acessos são governados na tela Contas.
 
-A ferramenta automatiza a coleta, o processamento e a extração de dados de notícias para alimentar a produção da newsletter.
+## 2. Registro do software
 
-O sistema identifica novas publicações a partir das estruturas de indexação mantidas pelos próprios portais de notícias (arquivos sitemap.xml). Essa abordagem funciona porque os portais normalmente limitam o acesso de um usuário convencional a um número reduzido de notícias, mas mantêm os endereços de todas as páginas livremente disponíveis nesses arquivos de indexação, já que a indexação atrai novos leitores e atende ao próprio interesse comercial do portal.
+| Campo | Valor |
+|---|---|
+| Nome | GLOBAL QUANTUM INTELLIGENCE - QuIIN |
+| Criação | 27/04/2025 |
+| Publicação | 09/05/2025 |
+| Linguagem | Python (web scraping, PLN e automação de relatórios) |
+| Campo | IF01 - Informação científica, tecnológica, bibliográfica e estratégica |
+| Tipo | IA01 - Inteligência Artificial / GI01 - Gerenciador de Informações |
+| Proprietário | Quantum Industrial Innovation |
+| Autores | Mabel Diz Marques Mota / João Carlos Passos / Alexandre de Santa Barbara |
 
-A partir da base de links atualizada, a ferramenta simula o acesso de um usuário convencional para salvar localmente cada página servida pelo navegador. As etapas seguintes de refinamento desses dados são detalhadas na seção 2.
+(Espelha a seção “Sobre / Registro do Software” em `gui/frames/settings_frame.py`.)
 
-A ferramenta suporta quatro portais de notícias, cada um com seu próprio módulo de coleta:
-
-- `thequantuminsider.py` (The Quantum Insider)
-- `quantamagazine.py` (Quanta Magazine)
-- `quantumzeitgeist.py` (Quantum Zeitgeist)
-- `insidequantumtechnology.py` (Inside Quantum Technology)
-
-## 2. Conceito e Fluxo de Processamento
-
-Cada notícia passa por três formatos intermediários antes de chegar à IA, cada um mais enxuto que o anterior:
-
-- **Cache**: a página salva na íntegra, em HTML, com toda a carga estética e estrutural do site de origem.
-- **Article**: versão simplificada em HTML, já sem os elementos de layout do portal, pronta para leitura e processamento rápido.
-- **Content**: versão ainda mais reduzida, contendo apenas o conteúdo relevante da notícia, sem informações que não agreguem valor além do próprio texto. O objetivo é minimizar o volume de dados enviado à IA.
-
-<p align="center"><img src="./docs/images/image5.png" width="500"></p>
-<p align="center"><i>Exemplo de arquivo Cache</i></p>
-
-<p align="center"><img src="./docs/images/image6.png" width="500"></p>
-<p align="center"><i>Exemplo de arquivo Article</i></p>
-
-<p align="center"><img src="./docs/images/image7.png" width="500"></p>
-<p align="center"><i>Exemplo de arquivo Content</i></p>
-
-Com o arquivo Content pronto, a ferramenta encaminha o texto ao modelo de linguagem (LLM) usando templates de prompt com instruções precisas de saída. A IA retorna um JSON com estrutura e conteúdo definidos, e a ferramenta aplica mecanismos próprios de validação: se a resposta não atender ao formato esperado, o reprocessamento é automático. Esse desenho garante funcionamento autônomo, com resultados regulares mesmo sem supervisão constante.
-
-Depois que o motor principal termina sua execução, uma ferramenta auxiliar consolida todos os dados extraídos e processados em uma base final, unificada e organizada.
-
-## 3. Estrutura do Projeto
+## 3. Estrutura do projeto
 
 ```
 .
-├── main.py                       # Interface gráfica desktop (CustomTkinter)
-├── run.py                        # CLI: coleta + processamento via API de IA
-├── merge.py                      # CLI auxiliar: consolidação da base final
-├── core/                         # config_manager, api_client, preflight, task_runner, utils
-├── scrapers/                     # Coletores: thequantuminsider, quantamagazine,
-│                                 # quantumzeitgeist, insidequantumtechnology
-├── gui/                          # app, frames (home/settings/scraper/results/log),
-│                                 # components (sidebar/status/dialogs), theme
-├── tests/                        # Suíte pytest do núcleo (core/)
-├── template/                     # Templates de prompt, schema JSON e HTML em uso
-├── legacy/                       # Código e templates superados, mantidos como referência
+├── main.py                        # entrada desktop (abre o shell QuIIN)
+├── run.py                         # CLI: coleta + processamento via IA
+├── merge.py                       # CLI auxiliar: consolida documents-data.json
+├── core/                          # api_client, audit, config_manager, database,
+│                                  # exports, permissions, preflight, repository,
+│                                  # scoring, task_runner, utils (+ __init__)
+├── gui/
+│   ├── app.py                     # shell: sessão, busca global, gating por papel
+│   ├── components/                # dialogs, newsletter_dialog, sidebar, status_bar
+│   ├── frames/                    # accounts, dashboard, documents, home, login,
+│   │                              # log, results, scraper, settings
+│   └── theme/colors.py            # título, geometria, paleta QuIIN
+├── scrapers/                      # thequantuminsider, quantamagazine,
+│                                  # quantumzeitgeist, insidequantumtechnology
+├── template/                      # prompts parse_v4, translate_ptbr, html
+├── legacy/                        # referência histórica (parse_v3, sitemap)
+├── tests/                         # suíte pytest (14 módulos)
+├── docs/
+│   ├── images/                    # diagramas do pipeline legado
+│   └── superpowers/
+│       ├── specs/2026-09-14-quiin-design.md
+│       └── plans/2026-09-14-quiin-implementation.md
 ├── requirements.txt
 ├── requirements-dev.txt
 └── .gitignore
 ```
 
-Os diretórios `cache/`, `article/`, `content/` e `parse/`, além dos arquivos `cache.json`, `legacy.json` e `console.txt`, são criados e mantidos automaticamente pela ferramenta durante a execução. Eles não fazem parte do repositório (ver `.gitignore`).
+Dados de execução (`cache/`, `article/`, `content/`, `parse/`, `console.txt`, `documents-data.json`) são gerados no diretório de trabalho e não vão ao repositório. Configuração, usuários, pesos e auditoria vivem em `~/.newsletter_tool/` (pasta do usuário).
 
-## 4. Ambiente e Dependências
+## 4. Instalação
 
-Ambiente:
-
-```
-Python 3.10+
-```
-
-Recomenda-se um ambiente virtual isolado (nenhuma etapa exige permissão
-de administrador):
+Requisito: Python 3.10+ (verificado neste repo com 3.14.3). Nenhuma etapa exige administrador:
 
 ```
 python -m venv .venv
@@ -81,136 +66,138 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Para desenvolvimento/testes, instale também `requirements-dev.txt`
-e rode a suíte com `python -m pytest tests -q`.
+Para desenvolvimento/testes, além do acima:
 
-A integração com IA usa provedores via API (Groq, OpenRouter, NVIDIA NIM,
-OpenAI ou endpoint personalizado) através do cliente unificado
-`core/api_client.py`. A antiga dependência do LM Studio local (`lmstudio`)
-foi removida.
+```
+pip install -r requirements-dev.txt
+```
 
-## 5. Execução
+Dependências de execução: `selenium`, `webdriver-manager`, `cloudscraper`, `beautifulsoup4`, `lxml`, `customtkinter`, `openai`, `keyring`, `json-repair`, `python-dateutil`, `matplotlib`, `reportlab`, `python-docx`. Dev: `pytest`, `coverage`.
 
-### 5.0 Interface Gráfica (recomendado)
+## 5. Primeiro uso
 
 ```
 python main.py
 ```
 
-Fluxo de operação para o usuário:
+1. **Bootstrap do admin:** na primeira execução o banco (`~/.newsletter_tool/users.db`) está vazio e um assistente pede nome, usuário e senha do administrador inicial. Um **código de recuperação é exibido uma única vez** — guarde-o em local seguro; ele é de **uso único** (apagado após o uso) e recupera o admin.
+2. **Login:** entre com usuário e senha. Contas com status `pendente` ou `revogado` são bloqueadas com a mensagem “Conta pendente ou revogada. Aguarde aprovação de um administrador.”
+3. **Sign Up:** o botão cria conta `basico` com status `pendente`; um admin precisa aprová-la na tela Contas. “Esqueci minha senha” orienta a contatar um administrador (que redefine pela tela Contas).
+4. **Papéis:** `basico` (visualiza), `premium` (visualiza e exporta/imprime/compartilha/gera newsletter), `admin` (tudo, incluindo contas, pesos, IA e pipeline).
 
-1. Em **⚙️ Configurações**, escolha o provedor de IA, cadastre a API key
-   (guardada no cofre do sistema operacional), escolha o modelo e os
-   portais, e clique em **🔗 Testar Conexão**.
-2. Em **🚀 Execução**, confira o pré-voo (navegador, driver, internet, chave,
-   conexão com o provedor, diretórios e templates), ajuste as opções
-   (incluindo **A partir de**, o filtro de data mínima) e clique em
-   **▶ Iniciar Pipeline**. O progresso e os logs aparecem em tempo real.
-3. Em **📊 Resultados**, navegue pela base consolidada (`documents-data.json`)
-   e exporte CSV se necessário.
+Ciclo de vida da conta: `Sign Up → pendente → Aprovar (ativo)`; `Fornecer acesso` (tela Contas) cria usuário já `ativo`; `Cancelar acesso` marca `revogado`; `Redefinir senha` troca a senha. Toda mutação é registrada no audit log (`~/.newsletter_tool/audit.log`).
 
-As configurações ficam em `~/.newsletter_tool/` (pasta do usuário).
-O ChromeDriver é baixado para `~/.wdm/` (pasta do usuário).
-Nada exige permissão de administrador.
+## 6. Guia por tela + matriz de permissões
 
-### 5.1 Linha de Comando (headless)
+Barra lateral: 📊 Dashboard · 📄 Documentos · 🚀 Execução · 📊 Resultados · 🧾 Logs · 👥 Contas (só admin) · ⚙️ Configurações. Busca global no cabeçalho filtra Dashboard e Documentos.
 
-A execução por CLI ocorre em duas etapas, nesta ordem:
+| Tela | O que faz | Capacidade exigida |
+|---|---|---|
+| Login | Entrar, Sign Up, recuperação, bootstrap do admin | — (aberta) |
+| 📊 Dashboard | cards, gráficos, filtros, tabela, índice multicritério (botão Editar), newsletter Automática/Personalizada, Imprimir, Compartilhar | ver/buscar: todos; `edit_weights`: admin; `generate_newsletter`, `print`, `share`: premium+admin (botões desabilitados sem permissão) |
+| 📄 Documentos | lista paginada (20/página), detalhe com indicadores, Exportar PDF/WORD do documento, adicionar notícia manual | ver/buscar: todos; `export`: premium+admin; `add_news`: admin |
+| 🚀 Execução | pré-voo (navegador, driver, internet, chave, provedor, diretórios, templates), opções e ▶ Iniciar Pipeline em thread dedicada | `run_pipeline`: admin |
+| 📊 Resultados | base consolidada (`documents-data.json`), Exportar CSV | ver: todos |
+| 🧾 Logs | logs da execução em tempo real (`console.txt` na raiz) | ver: todos |
+| 👥 Contas | tabela Nome \| Username \| Tipo \| Organização \| Interno/Externo \| Status; Fornecer acesso; Aprovar / Cancelar acesso / Redefinir senha | `manage_accounts`: admin (tela oculta dos demais) |
+| ⚙️ Configurações | bloco IA (provedor, chave, modelo, Testar Conexão), Perfil (nome/organização), editor de pesos, Sobre/Registro | `configure_ai`: admin (bloco IA); `edit_weights`: admin (pesos); perfil: próprio usuário |
 
-- `python run.py`: motor principal. Coleta, processa e extrai as notícias.
-- `python merge.py`: ferramenta auxiliar. Consolida os dados na base final.
+Matriz de permissões (`core/permissions.py`, `CAN`):
 
-`run.py` lê provedor, modelo, portais e filtro de data do arquivo de
-configuração (`~/.newsletter_tool/config.json`), com sobrescrita por flags:
+| Capacidade | basico | premium | admin |
+|---|---|---|---|
+| `view`, `search` | ✓ | ✓ | ✓ |
+| `export`, `print`, `share`, `generate_newsletter` | — | ✓ | ✓ |
+| `add_news`, `edit_weights`, `manage_accounts`, `configure_ai`, `run_pipeline` | — | — | ✓ |
 
-- `--debug`: ativa logs detalhados (nível DEBUG) e salva arquivos auxiliares para depuração.
-- `--ignore-cache`: ignora o cache local e baixa novamente todas as páginas.
-- `--provider`, `--model`, `--api-key`, `--min-date`, `--portals`: sobrescrevem o config.
+## 7. Índice multicritério
 
-Por padrão, apenas o portal The Quantum Insider está habilitado no config.
-Para incluir outro portal pela CLI, passe `--portals`
-(ex.: `--portals thequantuminsider,quantamagazine`).
+Pesos padrão (`core/scoring.py`, `DEFAULT_WEIGHTS`): `negocios=35, mercado=35, cientifica=15, tecnologica=15` (soma obrigatória = 100; cada peso inteiro 0–100; persistem em `~/.newsletter_tool/weights.json`, só admin edita).
 
-### 5.2 Motor Principal (run.py)
+Indicadores por documento (0–1, limitados com `clip01`):
 
-A execução do motor principal passa por cinco estágios, descritos a seguir.
+- `negocios = classification_weight.Business / 35`
+- `mercado = min(1, (nº financial_activity + nº event + nº breakthrough) / 3)`
+- `cientifica = classification_weight.Scientific / 15`
+- `tecnologica = classification_weight.Technological / 35`
 
-**Estágio 1: Carregamento do Modelo**
+Relevância (`relevance`):
 
-O motor inicializa o cliente do provedor de IA configurado (Groq, OpenRouter, NVIDIA NIM, OpenAI ou endpoint personalizado). O log confirma o provedor e o modelo em uso.
+```
+relevância = round(100 × Σ (peso[k]/100) × indicador[k])   → inteiro 0–100
+```
 
-<p align="center"><img src="./docs/images/image1.png" width="650"></p>
-<p align="center"><i>Estágio 1: inicialização do cliente do provedor de IA</i></p>
+Área do documento (`area_of`): maior entre Business→Negócio/Economia, Technological→Tecnológico, Scientific→Científico, Others→Outros.
 
-**Estágio 2: Carregamento do Scraper**
+## 8. Pipeline de IA
 
-A ferramenta inicializa o WebDriver (via webdriver-manager), responsável por simular o navegador que acessa e baixa as páginas de notícias.
+Provedores (`core/config_manager.py`, `PROVIDERS`): `groq` (padrão, `llama-3.3-70b-versatile`), `openrouter`, `nvidia` (NIM), `openai` (`gpt-4o-mini`) e `custom` (endpoint personalizado). Modelos alternativos por provedor e `Testar Conexão` na tela Configurações.
 
-<p align="center"><img src="./docs/images/image2.png" width="650"></p>
-<p align="center"><i>Estágio 2: inicialização do WebDriver</i></p>
+Chaves: cofre nativo do SO via `keyring` (serviço `newsletter_tool`); sem backend utilizável, fallback em `~/.newsletter_tool/.credentials` (JSON, permissão só do dono). Config geral em `~/.newsletter_tool/config.json` (provedor, modelo, portais, `min_date`, etc.).
 
-**Estágio 3: Identificação de Notícias**
+Execução headless (lê o config, sobrescreve por flags):
 
-Com o driver pronto, a ferramenta carrega os arquivos sitemap.xml do portal configurado para localizar novas notícias e atualizar a base local de links.
+```
+python run.py [--provider ... --model ... --api-key ... --min-date AAAA-MM-DD --portals thequantuminsider,quantamagazine] [--ignore-cache] [--debug]
+python merge.py
+```
 
-<p align="center"><img src="./docs/images/image2.png" width="650"></p>
-<p align="center"><i>Estágio 3: leitura dos arquivos sitemap.xml</i></p>
+Sempre `run.py` antes de `merge.py`. Pela GUI: Configurações → Testar Conexão → Execução → ▶ Iniciar Pipeline (pré-voo precisa estar verde).
 
-**Estágio 4: Extração e Processamento de Notícias**
+## 9. Exportações PDF / WORD / impressão / compartilhamento
 
-Para cada link identificado, a ferramenta verifica se a notícia já foi processada anteriormente. Quando o HTML já existe e está atualizado, o registro existente é mantido e a notícia é pulada (mensagens "WARNING - Skip due to published date!"), evitando reprocessamento desnecessário em execuções subsequentes.
+A newsletter (`core/exports.py`, `build_newsletter`) ordena os documentos por relevância e monta seções com título, resumo, pontos-chave, área, relevância, organizações, países e URL. Modos: **Automático** (top-N pelos pesos) e **Personalizado** (modal de seleção/ordenação).
 
-<p align="center"><img src="./docs/images/image3.png" width="650"></p>
-<p align="center"><i>Estágio 4: verificação de notícias já processadas</i></p>
+- **PDF** (`export_pdf`, reportlab A4): diálogo “salvar como”, nome padrão da newsletter.
+- **WORD** (`export_word`, python-docx): `.docx` com títulos, resumo e bullets.
+- **Imprimir** (`print_pdf`): no Windows envia à impressora; sem impressora, abre o PDF no visualizador.
+- **Compartilhar** (`share_package`): gera `newsletter.md` numa pasta e a abre no explorador.
+- **Documento avulso** (tela Documentos): Exportar PDF / Exportar WORD do item selecionado; **CSV** da base na tela Resultados.
 
-**Estágio 5: Compilação dos Resultados**
+Exportações rodam em threads dedicadas (a interface não congela) e os botões são desabilitados para quem não tem a capacidade (`Sem permissão: requer '…'`, visível na barra de status).
 
-Ao final da varredura, a sessão do WebDriver é encerrada, as notícias são ordenadas por data de publicação (mais recentes primeiro) e o resultado consolidado é salvo em quantum_articles.json.
+## 10. Testes
 
-<p align="center"><img src="./docs/images/image4.png" width="650"></p>
-<p align="center"><i>Estágio 5: encerramento e gravação do resultado</i></p>
+```
+.venv\Scripts\python -m pytest tests -q
+```
 
-### 5.3 Ferramenta Auxiliar (merge.py)
+→ `118 passed`. Cobertura do gate RNF-07 (novos módulos `core/` ≥ 80%):
 
-Após a execução do motor principal, execute merge.py para consolidar os dados extraídos e processados pela IA na base final utilizada na produção da newsletter (documents-data.json).
+```
+.venv\Scripts\python -m coverage run -m pytest tests -q
+.venv\Scripts\python -m coverage report --include="core/scoring.py,core/repository.py,core/database.py,core/permissions.py,core/audit.py,core/exports.py"
+```
 
-## 6. Estrutura de Saída
+→ `audit 100% · database 100% · exports 100% · permissions 100% · repository 100% · scoring 98%` (total 99%). Verificação E2E (não-admin, ambos os papéis, PDFs/WORD com magic bytes, botões desabilitados para básico): 32/32. Nada fora de user-space: escrita só em `~/.newsletter_tool/`, pastas de dados do diretório de trabalho e pasta de exportação escolhida pelo usuário.
 
-O arquivo final segue a estrutura abaixo, definida pelo template de prompt enviado à IA:
+## 11. Limitações conhecidas + roadmap
 
-<p align="center"><img src="./docs/images/image8.png" width="650"></p>
-<p align="center"><i>Estrutura JSON de saída definida no template de prompt</i></p>
+- Gráficos/top-5 países ficam esparsos até o pipeline rodar e popular `documents-data.json` (base atual pequena — esperado).
+- Pesos precisam somar 100 (inteiros 0–100); fora disso a validação rejeita.
+- Código ISO3 de país desconhecido exibe o próprio código (fallback).
+- Sem impressora no Windows, Imprimir abre o PDF em vez de falhar.
+- Gráficos matplotlib são computados em worker e renderizados via `after` (a GUI não congela; testado com 2k docs sintéticos).
+- Roadmap: rodar o pipeline para adensar a base; novos portais via `scrapers/`; evoluções de newsletter (templates em `template/`); manter `core/utils.py`/`task_runner.py` intocados sem justificativa escrita.
 
-Principais campos:
+Especificação e plano: `docs/superpowers/specs/2026-09-14-quiin-design.md`, `docs/superpowers/plans/2026-09-14-quiin-implementation.md`.
 
-- `newsletter`: título otimizado para SEO.
-- `summary` / `overview`: versões resumida e estendida do conteúdo.
-- `key_points`: lista dos pontos-chave da notícia.
-- `classification_weight`: pesos atribuídos pela IA a cada categoria (Business, Technological, Scientific, Others), usados para priorizar o conteúdo da newsletter.
-- `organization` / `event`: organizações e eventos mencionados na notícia, com localização.
-- `breakthrough`: descrições de avanços relevantes identificados na notícia.
-- `financial_activity`: valores e descrições de atividades financeiras mencionadas.
-- `related_country`: países relacionados ao conteúdo da notícia.
+## 12. Changelog (fase QuIIN)
 
-### 6.1 quantum_articles.json
-
-Gerado pelo motor principal (run.py), este arquivo mantém o registro bruto de cada notícia coletada: URL, título, categoria, autor, datas de publicação e modificação, palavras-chave e um hash de verificação, usado para identificar duplicidades e mudanças de conteúdo.
-
-<p align="center"><img src="./docs/images/image9.png" width="650"></p>
-<p align="center"><i>Exemplo de registro em quantum_articles.json</i></p>
-
-### 6.2 documents-data.json
-
-Gerado após o processamento pela IA e consolidado por merge.py, este arquivo contém a versão enriquecida de cada notícia, já classificada e estruturada conforme o padrão descrito na seção 6, pronta para uso na newsletter.
-
-<p align="center"><img src="./docs/images/image10.png" width="650"></p>
-<p align="center"><i>Exemplo de registro em documents-data.json</i></p>
-
-## 7. Observações para o Operador
-
-- As mensagens "WARNING - Skip due to published date!" são esperadas em execuções repetidas: indicam que a notícia já foi processada e está atualizada, não um erro.
-- O campo `hash` em quantum_articles.json permite à ferramenta detectar duplicidades e mudanças de conteúdo sem reprocessar tudo a cada execução.
-- Se a IA retornar um JSON fora do formato esperado, a própria ferramenta identifica a falha e reprocessa o item automaticamente, sem necessidade de intervenção manual.
-- Sempre execute run.py antes de merge.py: a ferramenta auxiliar depende da base gerada pelo motor principal.
-- O log completo de cada execução é salvo em console.txt, na raiz do projeto.
-- A pasta `legacy/` guarda código e templates superados, mantidos apenas como referência histórica (ver `legacy/README.md`).
+- `refactor: move profile update into core database API`
+- `feat: add accounts governance and extended settings`
+- `feat: add paginated documents screen with detail`
+- `feat: add automatic and custom newsletter exports`
+- `feat: add QuIIN analytics dashboard`
+- `fix: harden QuIIN auth shell per review (gating registry, pack order, cached search, session allowlist, bootstrap guard)`
+- `feat: add QuIIN auth shell with session and global search`
+- `test: top up QuIIN core coverage to RNF-07 gate`
+- `feat: add newsletter exports (PDF, WORD, print, share)`
+- `feat: add role matrix and audit log with tests`
+- `fix: harden database auth (strip secrets, constant-time compare, single-use recovery)`
+- `feat: add SQLite user store with bootstrap and recovery`
+- `feat: add pure document repository with tests`
+- `feat: add pure multicriteria scoring with tests`
+- `feat: add QuIIN GUI deps (matplotlib, reportlab, python-docx, coverage)`
+- `docs: QuIIN implementation plan (FASE 0-8, tasks com testes)`
+- `docs: spec QuIIN GLOBAL QUANTUM INTELLIGENCE (design aprovado, abordagem A hibrida)`
