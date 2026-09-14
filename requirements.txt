@@ -26,3 +26,7 @@ keyring
 # Reparo de JSON e parsing de datas
 json-repair
 python-dateutil
+# GUI QuIIN: gráficos e exportações
+matplotlib
+reportlab
+python-docx
