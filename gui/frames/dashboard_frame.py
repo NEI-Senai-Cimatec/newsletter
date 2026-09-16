@@ -17,11 +17,15 @@ import customtkinter as ctk
 
 from core import repository
 from core.audit import log_event
+from core.briefs import build_client_from_config
 from core.config_manager import PROVIDERS
 from core.exports import build_newsletter, export_pdf, export_word, print_pdf, share_package
 from core.repository import AREAS
 from core.scoring import INDICADORES, LABELS, load_weights, relevance, save_weights, validate_weights
 from gui.components.newsletter_dialog import open_newsletter_modal
+from gui.theme.charts import (BAR_ADJUST, DONUT_ADJUST, FIGURE_DPI,
+                              PANEL_COLOR, QUIIN_PALETTE, apply_theme,
+                              style_bars, style_donut)
 from gui.theme.colors import MONO_FONT, NORMAL_FONT, SECTION_FONT, SMALL_FONT, TITLE_FONT
 
 logger = logging.getLogger(__name__)
@@ -83,7 +87,7 @@ class DashboardFrame(ctk.CTkFrame):
         charts = ctk.CTkFrame(scroll, fg_color="transparent")
         charts.pack(fill="x", padx=8, pady=8)
         charts.columnconfigure((0, 1), weight=1)
-        bar_outer = ctk.CTkFrame(charts)
+        bar_outer = ctk.CTkFrame(charts, fg_color=PANEL_COLOR)
         bar_outer.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
         ctk.CTkLabel(bar_outer, text="Documentos por mês e área",
                      font=ctk.CTkFont(**SECTION_FONT)).pack(anchor="w", padx=12,
@@ -91,7 +95,7 @@ class DashboardFrame(ctk.CTkFrame):
         self.bar_box = ctk.CTkFrame(bar_outer, fg_color="transparent",
                                     height=320)
         self.bar_box.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-        donut_outer = ctk.CTkFrame(charts)
+        donut_outer = ctk.CTkFrame(charts, fg_color=PANEL_COLOR)
         donut_outer.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
         ctk.CTkLabel(donut_outer, text="Participação por área (%)",
                      font=ctk.CTkFont(**SECTION_FONT)).pack(anchor="w", padx=12,
@@ -428,21 +432,24 @@ class DashboardFrame(ctk.CTkFrame):
             ctk.CTkLabel(self.bar_box, text="Sem dados para exibir.").pack(
                 pady=20)
             return
-        figure = Figure(figsize=(5, 3), dpi=100)
+        figure = Figure(figsize=(5, 3), dpi=FIGURE_DPI)
         axes = figure.add_subplot(111)
         months = list(monthly)
         width = 0.2
         for i, area in enumerate(AREAS):
             axes.bar([x + i * width for x in range(len(months))],
-                     [monthly[m][area] for m in months], width=width,
-                     label=area)
+                      [monthly[m][area] for m in months], width=width,
+                      label=area, color=QUIIN_PALETTE[i % len(QUIIN_PALETTE)])
         axes.set_xticks([x + width * 1.5 for x in range(len(months))])
-        axes.set_xticklabels(months, rotation=30, ha="right")
+        axes.set_xticklabels(months)
         axes.set_ylabel("Documentos")
+        style_bars(axes)
         axes.legend()
-        figure.subplots_adjust(left=0.12, right=0.95, top=0.92, bottom=0.28)
+        apply_theme(figure, axes)
+        figure.subplots_adjust(**BAR_ADJUST)
         canvas = FigureCanvasTkAgg(figure, master=self.bar_box)
         canvas.draw()
+        canvas.get_tk_widget().configure(background=PANEL_COLOR)
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
     def _render_donut(self, share: dict) -> None:
@@ -451,14 +458,14 @@ class DashboardFrame(ctk.CTkFrame):
             ctk.CTkLabel(self.donut_box, text="Sem dados para exibir.").pack(
                 pady=20)
             return
-        figure = Figure(figsize=(5, 3), dpi=100)
+        figure = Figure(figsize=(5, 3), dpi=FIGURE_DPI)
         axes = figure.add_subplot(111)
-        axes.pie([share[a] for a in AREAS], labels=list(AREAS),
-                 autopct="%1.1f%%",
-                 wedgeprops=dict(width=0.4, edgecolor="white"))
-        figure.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.08)
+        style_donut(axes, share)
+        apply_theme(figure, axes)
+        figure.subplots_adjust(**DONUT_ADJUST)
         canvas = FigureCanvasTkAgg(figure, master=self.donut_box)
         canvas.draw()
+        canvas.get_tk_widget().configure(background=PANEL_COLOR)
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
     def _render_countries(self, countries: list) -> None:
@@ -551,12 +558,30 @@ class DashboardFrame(ctk.CTkFrame):
                       command=dialog.destroy).pack(side="left")
 
     # -- print / share --------------------------------------------------
+    def _brief_client(self):
+        """API client for briefs (None without a stored key).
+
+        Call only from worker threads: key storage access is I/O and
+        must never run on the Tk main thread (R2).
+        """
+        try:
+            return build_client_from_config(self.app.config,
+                                            self.app.config_manager)
+        except Exception:
+            logger.debug("Brief client unavailable", exc_info=True)
+            return None
+
+    def _brief_progress(self, i: int, total: int) -> None:
+        self._notify(f"Condensando resumo {i}/{total}...")
+
     def _dashboard_structure(self, docs: list, weights: dict) -> dict:
         ranked = sorted(docs,
                         key=lambda d: self._view_relevance(d, weights),
                         reverse=True)[:20]
         return build_newsletter(ranked, weights, "dashboard",
-                                {"title": NEWSLETTER_TITLE})
+                                {"title": NEWSLETTER_TITLE},
+                                api_client=self._brief_client(),
+                                progress_cb=self._brief_progress)
 
     def _print_dashboard(self) -> None:
         docs = self._effective_docs()
@@ -640,14 +665,24 @@ class DashboardFrame(ctk.CTkFrame):
         ranked = sorted(docs,
                         key=lambda d: self._view_relevance(d, weights),
                         reverse=True)
+        initial = bool((self.app.config.get("newsletter") or {}).get(
+            "include_key_points", False))
         open_newsletter_modal(
             self, ranked, weights, self._view_relevance,
-            lambda chosen, dialog, w=dict(weights):
-            self._confirm_newsletter_modal(chosen, dialog, w))
+            lambda chosen, dialog, flag=False, w=dict(weights):
+            self._confirm_newsletter_modal(chosen, dialog, w, flag),
+            include_key_points=initial)
 
     def _confirm_newsletter_modal(self, chosen: list, dialog,
-                                  weights: dict) -> None:
+                                  weights: dict,
+                                  include_key_points: bool = False) -> None:
         """Destino + worker do Personalizado (main thread; exporta no worker)."""
+        try:
+            self.app.config.setdefault("newsletter", {})[
+                "include_key_points"] = bool(include_key_points)
+            self.app.save_config()
+        except Exception:
+            logger.debug("Persist include_key_points failed", exc_info=True)
         path = filedialog.asksaveasfilename(
             parent=dialog,
             title="Exportar newsletter personalizada",
@@ -663,34 +698,42 @@ class DashboardFrame(ctk.CTkFrame):
             pass
         thread = threading.Thread(
             target=self._newsletter_export_worker,
-            args=(list(chosen), weights, "personalizado", path),
+            args=(list(chosen), weights, "personalizado", path,
+                  bool(include_key_points)),
             daemon=True)
         thread.start()
 
     def _newsletter_export_worker(self, docs: list, weights: dict,
-                                  mode: str, path: str) -> None:
+                                  mode: str, path: str,
+                                  include_key_points: bool = False) -> None:
         try:
+            client = self._brief_client()
             if mode == "automatico":
                 ranked = sorted(
                     docs, key=lambda d: self._view_relevance(d, weights),
                     reverse=True)[:20]
-                structure = build_newsletter(ranked, weights, mode,
-                                             {"title": NEWSLETTER_TITLE})
+                structure = build_newsletter(
+                    ranked, weights, mode, {"title": NEWSLETTER_TITLE},
+                    api_client=client, progress_cb=self._brief_progress)
             else:
                 # Personalizado: a ordem do modal é autoritativa —
                 # build_newsletter não reordena (preserve_order=True),
                 # o que também elimina a divergência em empates.
                 chosen = list(docs)
-                structure = build_newsletter(chosen, weights, mode,
-                                             {"title": NEWSLETTER_TITLE},
-                                             preserve_order=True)
+                structure = build_newsletter(
+                    chosen, weights, mode, {"title": NEWSLETTER_TITLE},
+                    preserve_order=True, api_client=client,
+                    progress_cb=self._brief_progress,
+                    include_key_points=include_key_points)
+            total = len(structure["sections"])
+            self._notify(f"Newsletter gerada: {total} documentos ({mode}).")
             suffix = Path(path).suffix.lower()
             if suffix == ".docx":
                 export_word(structure, path)
             else:
                 export_pdf(structure, path)
             log_event(self._current_user(), "generate_newsletter",
-                      f"modo={mode} documentos={len(structure['sections'])}")
+                      f"modo={mode} documentos={total}")
             self._notify(f"Newsletter ({mode}) exportada para {path}.")
         except Exception as exc:
             logger.debug("Newsletter export failed", exc_info=True)

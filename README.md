@@ -30,20 +30,21 @@ Uso típico: o admin configura o provedor de IA e executa o pipeline; a equipe n
 ├── main.py                        # entrada desktop (abre o shell QuIIN)
 ├── run.py                         # CLI: coleta + processamento via IA
 ├── merge.py                       # CLI auxiliar: consolida documents-data.json
-├── core/                          # api_client, audit, config_manager, database,
-│                                  # exports, permissions, preflight, repository,
-│                                  # scoring, task_runner, utils (+ __init__)
+├── core/                          # api_client, audit, briefs, config_manager,
+│                                  # database, exports, permissions, preflight,
+│                                  # repository, scoring, task_runner, utils (+ __init__)
 ├── gui/
 │   ├── app.py                     # shell: sessão, busca global, gating por papel
 │   ├── components/                # dialogs, newsletter_dialog, sidebar, status_bar
 │   ├── frames/                    # accounts, dashboard, documents, home, login,
 │   │                              # log, results, scraper, settings
-│   └── theme/colors.py            # título, geometria, paleta QuIIN
+│   └── theme/                       # colors.py (título, geometria, paleta),
+│                                  # charts.py (tema dos gráficos do Dashboard)
 ├── scrapers/                      # thequantuminsider, quantamagazine,
 │                                  # quantumzeitgeist, insidequantumtechnology
-├── template/                      # prompts parse_v4, translate_ptbr, html
+├── template/                      # prompts parse_v4, translate_ptbr, brief_ptbr, html
 ├── legacy/                        # referência histórica (parse_v3, sitemap)
-├── tests/                         # suíte pytest (14 módulos)
+├── tests/                         # suíte pytest (16 módulos)
 ├── docs/
 │   ├── images/                    # diagramas do pipeline legado
 │   └── superpowers/
@@ -94,7 +95,7 @@ Barra lateral: 📊 Dashboard · 📄 Documentos · 🚀 Execução · 📊 Resu
 | Tela | O que faz | Capacidade exigida |
 |---|---|---|
 | Login | Entrar, Sign Up, recuperação (admin informa o usuário e usa o código de uso único; demais contatam um admin), bootstrap do admin | — (aberta) |
-| 📊 Dashboard | cards, gráficos, filtros, tabela, índice multicritério (botão Editar), newsletter Automática/Personalizada, Imprimir, Compartilhar | ver/buscar: todos; `edit_weights`: admin; `generate_newsletter`, `print`, `share`: premium+admin (botões desabilitados sem permissão) |
+| 📊 Dashboard | cards, gráficos com tema QuIIN (`gui/theme/charts.py`: paleta fixa por área, donut sem sobreposição de rótulos), filtros, tabela, índice multicritério (botão Editar), newsletter Automática/Personalizada, Imprimir, Compartilhar | ver/buscar: todos; `edit_weights`: admin; `generate_newsletter`, `print`, `share`: premium+admin (botões desabilitados sem permissão) |
 | 📄 Documentos | lista paginada (20/página), detalhe com indicadores, Exportar PDF/WORD do documento, adicionar notícia manual | ver/buscar: todos; `export`: premium+admin; `add_news`: admin |
 | 🚀 Execução | pré-voo (navegador, driver, internet, chave, provedor, diretórios, templates), opções e ▶ Iniciar Pipeline em thread dedicada | `run_pipeline`: admin (botão Iniciar desabilitado + motivo na barra de status sem a capacidade) |
 | 📊 Resultados | base consolidada (`documents-data.json`), Exportar CSV | ver: todos; `export`: premium+admin (botão desabilitado sem a capacidade) |
@@ -146,15 +147,15 @@ Sempre `run.py` antes de `merge.py`. Pela GUI: Configurações → Testar Conex�
 
 ## 9. Exportações PDF / WORD / impressão / compartilhamento
 
-A newsletter (`core/exports.py`, `build_newsletter`) ordena os documentos por relevância e monta seções com título, resumo, pontos-chave, área, relevância, organizações, países e URL. Modos: **Automático** (top-N pelos pesos) e **Personalizado** (modal de seleção/ordenação — a ordem do modal é preservada no arquivo).
+A newsletter (`core/exports.py`, `build_newsletter`) ordena os documentos por relevância e monta seções no formato: linha de título `{título} — {área} ({relevância})`, **um único parágrafo de resumo (brief)** e linha `Fonte: {url}`. O brief (`core/briefs.py`, `build_brief`, prompt `template/brief_ptbr.txt`) tem no máximo 700 caracteres e 100 palavras: com chave de API configurada, é condensado e traduzido para pt-BR em 1 chamada (+1 retry instruído); sem chave ou com falha, cai no fallback extrativo no idioma original ("quando possível", RF-N2) — o export nunca falha por causa da API. Modos: **Automático** (top-N pelos pesos, sem bullets) e **Personalizado** (modal de seleção/ordenação — a ordem do modal é preservada — com checkbox "Incluir pontos-chave", desligado por padrão e persistido em `config["newsletter"]["include_key_points"]`; ligado, os bullets voltam após a linha Fonte). Padrões em `~/.newsletter_tool/config.json`: `newsletter: {max_chars: 700, max_words: 100, language: ptbr, include_key_points: false}`.
 
 - **PDF** (`export_pdf`, reportlab A4): diálogo “salvar como”, nome padrão da newsletter.
-- **WORD** (`export_word`, python-docx): `.docx` com títulos, resumo e bullets (somente `.docx` gera WORD; outra extensão cai no PDF).
+- **WORD** (`export_word`, python-docx): `.docx` com títulos, brief e Fonte (somente `.docx` gera WORD; outra extensão cai no PDF).
 - **Imprimir** (`print_pdf`): no Windows envia à impressora; sem impressora, abre o PDF no visualizador.
-- **Compartilhar** (`share_package`): grava `newsletter.md` numa pasta e a abre no explorador (não copia nada para a área de transferência).
-- **Documento avulso** (tela Documentos): Exportar PDF / Exportar WORD do item selecionado; **CSV** da base na tela Resultados.
+- **Compartilhar** (`share_package`): grava `newsletter.md` no mesmo formato (brief + Fonte) numa pasta e a abre no explorador (não copia nada para a área de transferência).
+- **Documento avulso** (tela Documentos): Exportar PDF / Exportar WORD do item selecionado no mesmo formato; **CSV** da base na tela Resultados.
 
-Exportações rodam em threads dedicadas (a interface não congela) e os botões são desabilitados para quem não tem a capacidade (`Sem permissão: requer '…'`, visível na barra de status).
+Exportações rodam em threads dedicadas (a interface não congela), com progresso na barra de status (`Condensando resumo i/N...` → `Newsletter gerada: N documentos (modo).`), e os botões são desabilitados para quem não tem a capacidade (`Sem permissão: requer '…'`, visível na barra de status).
 
 ## 10. Testes
 
@@ -162,14 +163,14 @@ Exportações rodam em threads dedicadas (a interface não congela) e os botões
 .venv\Scripts\python -m pytest tests -q
 ```
 
-→ `118 passed`. Cobertura do gate RNF-07 (novos módulos `core/` ≥ 80%):
+→ `157 passed`. Cobertura do gate RNF-07 (novos módulos `core/` ≥ 80%):
 
 ```
 .venv\Scripts\python -m coverage run -m pytest tests -q
-.venv\Scripts\python -m coverage report --include="core/scoring.py,core/repository.py,core/database.py,core/permissions.py,core/audit.py,core/exports.py"
+.venv\Scripts\python -m coverage report --include="core/scoring.py,core/repository.py,core/database.py,core/permissions.py,core/audit.py,core/exports.py,core/briefs.py"
 ```
 
-→ `audit 100% · database 100% · exports 100% · permissions 100% · repository 100% · scoring 98%` (total 99%). Verificação E2E (não-admin, ambos os papéis, PDFs/WORD com magic bytes, botões desabilitados para básico): 32/32. Nada fora de user-space: escrita só em `~/.newsletter_tool/`, pastas de dados do diretório de trabalho e pasta de exportação escolhida pelo usuário.
+→ `audit 100% · briefs 98% · database 100% · exports 92% · permissions 100% · repository 100% · scoring 98%` (total 98%). Verificação E2E (não-admin, ambos os papéis, PDFs/WORD com magic bytes, botões desabilitados para básico): 32/32. Nada fora de user-space: escrita só em `~/.newsletter_tool/`, pastas de dados do diretório de trabalho e pasta de exportação escolhida pelo usuário.
 
 ## 11. Limitações conhecidas + roadmap
 
@@ -178,12 +179,15 @@ Exportações rodam em threads dedicadas (a interface não congela) e os botões
 - Código ISO3 de país desconhecido exibe o próprio código (fallback).
 - Sem impressora no Windows, Imprimir abre o PDF em vez de falhar.
 - Gráficos matplotlib são computados em worker e renderizados via `after` (a GUI não congela; testado com 2k docs sintéticos).
+- Sem chave de API configurada (ou com falha), os briefs da newsletter usam o fallback extrativo no idioma original do documento — pt-BR "quando possível" (RF-N2); o export nunca falha por causa da API.
 - Roadmap: rodar o pipeline para adensar a base; novos portais via `scrapers/`; evoluções de newsletter (templates em `template/`); manter `core/utils.py`/`task_runner.py` intocados sem justificativa escrita.
 
 Especificação e plano: `docs/superpowers/specs/2026-09-14-quiin-design.md`, `docs/superpowers/plans/2026-09-14-quiin-implementation.md`.
 
 ## 12. Changelog (fase QuIIN)
 
+- `feat: add pt-BR newsletter briefs with source line (API + retry + extractive fallback, progress)`
+- `feat: theme QuIIN dashboard charts (fixed area palette, overlap-free donut)`
 - `refactor: move profile update into core database API`
 - `feat: add accounts governance and extended settings`
 - `feat: add paginated documents screen with detail`

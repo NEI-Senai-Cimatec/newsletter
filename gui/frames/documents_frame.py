@@ -11,6 +11,7 @@ import customtkinter as ctk
 
 from core import repository
 from core.audit import log_event
+from core.briefs import build_client_from_config
 from core.exports import build_newsletter, export_pdf, export_word
 from core.repository import AREAS, add_manual_news
 from core.scoring import INDICADORES, LABELS, area_of, indicators, load_weights, relevance
@@ -433,8 +434,17 @@ class DocumentsFrame(ctk.CTkFrame):
     def _export_worker(self, doc: dict, weights: dict, path: str,
                        kind: str) -> None:
         try:
-            structure = build_newsletter([doc], weights, "documento",
-                                         {"title": NEWSLETTER_TITLE})
+            try:
+                client = build_client_from_config(self.app.config,
+                                                  self.app.config_manager)
+            except Exception:
+                client = None
+            structure = build_newsletter(
+                [doc], weights, "documento", {"title": NEWSLETTER_TITLE},
+                api_client=client,
+                progress_cb=lambda i, n: self._notify(
+                    f"Condensando resumo {i}/{n}..."))
+            self._notify("Newsletter gerada: 1 documentos (documento).")
             if kind == "word":
                 export_word(structure, path)
             else:

@@ -108,6 +108,12 @@ class ConfigManager:
             "min_date": "",
         },
         "language": "en",
+        "newsletter": {
+            "max_chars": 700,
+            "max_words": 100,
+            "language": "ptbr",
+            "include_key_points": False,
+        },
         "last_run": "",
     }
 

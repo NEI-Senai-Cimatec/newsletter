@@ -1,0 +1,2 @@
+Você é editor de newsletter científica. Reescreva o texto abaixo em português do Brasil, em UM ÚNICO parágrafo corrido, com no máximo 700 caracteres e no máximo 100 palavras, preservando fatos, valores e nomes. Não use listas, não use quebras de linha, não cite URLs, não adicione opiniões.
+TEXTO: {content}

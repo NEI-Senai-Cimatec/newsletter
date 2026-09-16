@@ -12,8 +12,13 @@ from gui.theme.colors import NORMAL_FONT, SECTION_FONT, SMALL_FONT
 
 
 def open_newsletter_modal(parent, ranked: list, weights: dict,
-                          view_relevance, on_confirm) -> None:
-    """Abre o modal; chama ``on_confirm(chosen, dialog)`` ao exportar."""
+                           view_relevance, on_confirm,
+                           include_key_points: bool = False) -> None:
+    """Abre o modal; chama ``on_confirm(chosen, dialog, include_key_points)``.
+
+    ``include_key_points`` é o valor inicial do checkbox "Incluir
+    pontos-chave" (persistido no config pelo chamador).
+    """
     dialog = ctk.CTkToplevel(parent)
     dialog.title("Newsletter personalizada")
     dialog.geometry("640x520")
@@ -97,10 +102,13 @@ def open_newsletter_modal(parent, ranked: list, weights: dict,
         if not chosen:
             error.configure(text="Selecione ao menos um documento.")
             return
-        on_confirm(chosen, dialog)
+        on_confirm(chosen, dialog, bool(points_var.get()))
 
+    points_var = ctk.BooleanVar(value=bool(include_key_points))
     bottom = ctk.CTkFrame(dialog, fg_color="transparent")
     bottom.pack(fill="x", padx=16, pady=(4, 12))
+    ctk.CTkCheckBox(bottom, text="Incluir pontos-chave",
+                    variable=points_var).pack(anchor="w", pady=(0, 6))
     ctk.CTkButton(bottom, text="Exportar",
                   command=_confirm).pack(side="left", padx=(0, 8))
     ctk.CTkButton(bottom, text="Cancelar", fg_color="transparent",
