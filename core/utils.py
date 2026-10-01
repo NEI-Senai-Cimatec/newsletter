@@ -246,7 +246,8 @@ def get_cache_file_name(url, type_):
 def get_cached_page(url, ignore_cache=False, driver=None, type_='article'):
     """
     Fetch a page from cache or live, saving to cache if fetched live.
-    Tries Selenium first, falls back to cloudscraper if Cloudflare protection is detected.
+    Tries cloudscraper first, falls back to Selenium when it fails (403,
+    Cloudflare, timeout), and never caches a Cloudflare challenge page.
     
     Args:
         url (str): URL to fetch.
@@ -297,7 +298,7 @@ def get_cached_page(url, ignore_cache=False, driver=None, type_='article'):
     
     # Try cloudscraper
     try:
-        response = scraper.get(url)
+        response = scraper.get(url, timeout=30)
         response.raise_for_status()
         page_source = response.text
         
@@ -315,10 +316,12 @@ def get_cached_page(url, ignore_cache=False, driver=None, type_='article'):
         save_cache_json(CACHE_JSON, cache_data)
         return page_source
     except Exception as e:
-        logger.error(f"Cloudscraper failed for {url}: {e}")
-        raise
+        logger.warning(f"Cloudscraper failed for {url}: {e}; falling back to Selenium")
 
-    # Fallback Selenium
+    # Fallback Selenium: reached whenever cloudscraper failed
+    if driver is None:
+        raise RuntimeError(f"Cloudscraper failed for {url} and no Selenium driver is available")
+
     try:
         driver.get(url)
         WebDriverWait(driver, 15).until(
@@ -328,25 +331,25 @@ def get_cached_page(url, ignore_cache=False, driver=None, type_='article'):
         
         # Check for Cloudflare protection
         if CLOUDFLARE_STRING in page_source:
-            logger.info("Cloudflare protection detected!")
-        else:
-            # Save to cache if no Cloudflare
-            with open(cache_path, 'w', encoding='utf-8') as f:
-                f.write(page_source)
-            
-            cache_data = [entry for entry in cache_data if entry['url'] != url or entry['type'] != type_]
-            cache_data.append({
-                'url': url,
-                'timestamp': datetime.now().isoformat(),
-                'file': cache_file,
-                'type': type_
-            })
-            save_cache_json(CACHE_JSON, cache_data)
+            logger.warning(f"Cloudflare protection detected for {url}; not caching")
             return page_source
         
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            f.write(page_source)
+        
+        cache_data = [entry for entry in cache_data if entry['url'] != url or entry['type'] != type_]
+        cache_data.append({
+            'url': url,
+            'timestamp': datetime.now().isoformat(),
+            'file': cache_file,
+            'type': type_
+        })
+        save_cache_json(CACHE_JSON, cache_data)
+        return page_source
     except Exception as e:
         logger.error(f"Selenium failed for {url}: {e}")
-    
+        raise
+
         
 def load_cache_json(json_file):
     """

@@ -3,6 +3,7 @@
 Covers only NEW/CHANGED behavior; untouched logic (validation, cache,
 scraping helpers) is preserved byte-for-byte from the original utils.py.
 """
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -156,3 +157,73 @@ def test_generate_content_json_garbage_retries_then_error_file(work_dirs: Path) 
     assert result is not None
     assert Path(result).name == f"error_{article_hash}_en.json"
     assert len(model.calls) == 2
+
+
+class _FakeDriver:
+    """Stands in for a Selenium WebDriver: page_source is already rendered."""
+
+    def __init__(self, page_source: str) -> None:
+        self.page_source = page_source
+        self.requested: list[str] = []
+
+    def get(self, url: str) -> None:
+        self.requested.append(url)
+
+    def find_element(self, by, value):
+        return object()
+
+
+def _cloudscraper_blocked(*args, **kwargs):
+    raise Exception("403 Client Error: Forbidden")
+
+
+@pytest.fixture()
+def cache_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    monkeypatch.setattr(cu, "CACHE_DIR", str(cache))
+    monkeypatch.setattr(cu, "CACHE_JSON", str(tmp_path / "cache.json"))
+    monkeypatch.setattr(cu.scraper, "get", _cloudscraper_blocked)
+    return cache
+
+
+def _cache_path(cache: Path, url: str, type_: str) -> Path:
+    return cache / f"{type_}_{hashlib.sha256(url.encode()).hexdigest()}.html"
+
+
+def test_get_cached_page_falls_back_to_selenium_when_cloudscraper_fails(
+    cache_dirs: Path,
+) -> None:
+    driver = _FakeDriver("<html>rendered</html>")
+    url = "https://www.insidequantumtechnology.com/news-archive/example/"
+
+    source = cu.get_cached_page(url, ignore_cache=True, driver=driver)
+
+    assert source == "<html>rendered</html>"
+    assert driver.requested == [url]
+    assert _cache_path(cache_dirs, url, "article").read_text(encoding="utf-8") == (
+        "<html>rendered</html>"
+    )
+    entries = json.loads((cache_dirs.parent / "cache.json").read_text(encoding="utf-8"))
+    assert [entry["url"] for entry in entries] == [url]
+
+
+def test_get_cached_page_does_not_cache_cloudflare_challenge(
+    cache_dirs: Path,
+) -> None:
+    driver = _FakeDriver("<html>challenge-error-text</html>")
+    url = "https://www.insidequantumtechnology.com/news-archive/blocked/"
+
+    source = cu.get_cached_page(url, ignore_cache=True, driver=driver)
+
+    assert "challenge-error-text" in source
+    assert not _cache_path(cache_dirs, url, "article").exists()
+    assert not (cache_dirs.parent / "cache.json").exists()
+
+
+def test_get_cached_page_without_driver_raises(cache_dirs: Path) -> None:
+    with pytest.raises(RuntimeError, match="example.com"):
+        cu.get_cached_page(
+            "https://example.com/no-driver", ignore_cache=True, driver=None
+        )
+
