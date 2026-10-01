@@ -12,10 +12,27 @@ from core.utils import (
     ARTICLE_DIR, CACHE_DIR, HTML_TEMPLATE,
     get_cache_file_name, initialize_driver, 
     logger, generate_content_text, generate_content_json,
-    remove_dupes, sortbydate, is_after_min_date
+    remove_dupes, sortbydate, is_after_min_date,
+    extract_article_metadata
 )
 
 #################
+
+def tqi_extract_metadata(soup):
+    """
+    Extract normalized metadata for a The Quantum Insider article page.
+
+    The portal no longer emits yoast-schema-graph; extraction then falls
+    back to every application/ld+json block and picks the article by @type
+    instead of by position.
+
+    Args:
+        soup (BeautifulSoup): Parsed article page.
+
+    Returns:
+        dict | None: Metadata, or None when the page declares none.
+    """
+    return extract_article_metadata(soup, script_class='yoast-schema-graph')
 
 def tqi_scrape_sitemap(list_sitemap, ignore_cache, driver, debug=False):
     """
@@ -163,34 +180,14 @@ def tqi_generate_article_html(url, articles_dict, ignore_cache, driver, debug=Fa
         article_data['category'] = []  
         article_data['keywords'] = []        
 
-        metadata = soup.find('script', class_='yoast-schema-graph')
+        metadata = tqi_extract_metadata(soup)
         
-        if metadata:
-            
-            metadata = json.loads(metadata.text)
-    
-            article_data['title'] = metadata['@graph'][0]['headline'] if 'headline' in metadata['@graph'][0] else '' 
-            article_data['author'] = metadata['@graph'][0]['author']['name'] if 'author' in metadata['@graph'][0] else '' 
-            article_data['date'] = parse_article_date(metadata['@graph'][0]['datePublished'])[0] if 'datePublished' in metadata['@graph'][0] else '' 
-            article_data['datePublished'] = parse_article_date(metadata['@graph'][0]['datePublished'])[1] if 'datePublished' in metadata['@graph'][0] else ''  
-            article_data['dateModified'] = parse_article_date(metadata['@graph'][0]['dateModified'])[1] if 'dateModified' in metadata['@graph'][0] else ''  
-            article_data['category'] = metadata['@graph'][0]['articleSection'] if 'articleSection' in metadata['@graph'][0] else '' 
-            article_data['keywords'] = metadata['@graph'][0]['keywords'] if 'keywords' in metadata['@graph'][0] else ''
-            
-        else:
-            
-            metadata = soup.find_all('script', attrs={'type': 'application/ld+json'})
-            
-            metadata = json.loads(metadata[1].text)
+        if metadata is None:
+            logger.warning(f"No metadata found within article for {url}")
+            return None
 
-            article_data['title'] = metadata['headline'] if 'headline' in metadata else '' 
-            article_data['author'] = metadata['author']['name'] if 'author' in metadata else '' 
-            article_data['date'] = parse_article_date(metadata['datePublished'])[0] if 'datePublished' in metadata else '' 
-            article_data['datePublished'] = parse_article_date(metadata['datePublished'])[1] if 'datePublished' in metadata else '' 
-            article_data['dateModified'] = parse_article_date(metadata['dateModified'])[1] if 'dateModified' in metadata else '' 
-            article_data['category'] = [metadata['articleSection']] if 'articleSection' in metadata else '' 
-            article_data['keywords'] = metadata['keywords'] if 'keywords' in metadata else ''   
-                
+        article_data.update(metadata)
+
         content_container = post_content.find('div', class_='elementor-widget-container')
         
         if not content_container:
