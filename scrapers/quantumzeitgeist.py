@@ -13,10 +13,56 @@ from core.utils import (
     ARTICLE_DIR, CACHE_DIR, HTML_TEMPLATE,
     get_cache_file_name, initialize_driver, 
     logger, generate_content_text, generate_content_json,
-    remove_dupes, sortbydate, is_after_min_date
+    remove_dupes, sortbydate, is_after_min_date,
+    extract_article_metadata
 )
 
 #################
+
+def qz_extract_metadata(soup):
+    """
+    Extract normalized metadata for a Quantum Zeitgeist article page.
+
+    The schema graph is located by @type (the site currently places its
+    NewsArticle node at index 7, but the order is not stable).
+
+    Args:
+        soup (BeautifulSoup): Parsed article page.
+
+    Returns:
+        dict | None: Metadata, or None when the page declares none.
+    """
+    metadata = extract_article_metadata(soup, script_class='rank-math-schema-pro')
+
+    if metadata is None:
+        return None
+
+    tags = soup.find('div', class_='tags-section')
+
+    if tags:
+        metadata['keywords'] = [
+            tag.get_text() for tag in tags.find_all('a') if tag.get_text(strip=True)
+        ]
+
+    return metadata
+
+def qz_is_relevant(metadata):
+    """
+    Decide whether an article belongs in a quantum newsletter.
+
+    Args:
+        metadata (dict): Metadata from qz_extract_metadata.
+
+    Returns:
+        bool: True when 'quantum' appears in categories, title or keywords.
+    """
+    haystack = ' '.join(
+        list(metadata.get('category') or [])
+        + [metadata.get('title') or '']
+        + list(metadata.get('keywords') or [])
+    ).lower()
+
+    return 'quantum' in haystack
 
 def qz_scrape_sitemap(list_sitemap, ignore_cache, driver, debug=False):
     """
@@ -132,35 +178,18 @@ def qz_generate_article_html(url, articles_dict, ignore_cache, driver, debug=Fal
         article_data['category'] = []  
         article_data['keywords'] = []        
 
-        metadata = soup.find('script', class_='rank-math-schema-pro')
+        metadata = qz_extract_metadata(soup)
         
-        if metadata:    
+        if metadata is None:
+            logger.warning(f"No metadata found within article for {url}")
+            return None
 
-            try:
-                metadata = json.loads(metadata.text) 
-            except:
-                metadata = repair_json(metadata.text)
-                metadata = json.loads(metadata)
-    
-            article_data['title'] = metadata['@graph'][0]['headline'] if 'headline' in metadata['@graph'][0] else '' 
-            article_data['author'] = metadata['@graph'][0]['author']['name'] if 'author' in metadata['@graph'][0] else '' 
-            article_data['date'] = parse_article_date(metadata['@graph'][0]['datePublished'])[0] if 'datePublished' in metadata['@graph'][0] else '' 
-            article_data['datePublished'] = parse_article_date(metadata['@graph'][0]['datePublished'])[1] if 'datePublished' in metadata['@graph'][0] else ''  
-            article_data['dateModified'] = parse_article_date(metadata['@graph'][0]['dateModified'])[1] if 'dateModified' in metadata['@graph'][0] else ''  
-            article_data['category'] = metadata['@graph'][0]['articleSection'] if 'articleSection' in metadata['@graph'][0] else ''
-            
-            if article_data['category'] == '' or 'Quantum' not in article_data['category'].split(' '):
-                logger.warning(f"Category invalid found within article for {url}")
-                return None
-            
-            keywords = post_content.find('div', class_='tags-section')
-            
-            if keywords:
-            
-                for keyword in keywords.find_all('a'):
-                
-                    article_data['keywords'].append(keyword.get_text())
-                
+        if not qz_is_relevant(metadata):
+            logger.warning(f"Category invalid found within article for {url}")
+            return None
+
+        article_data.update(metadata)
+
         content_container = post_content.find('div', class_='entry-content')
         
         if not content_container:
@@ -205,7 +234,7 @@ def qz_generate_article_html(url, articles_dict, ignore_cache, driver, debug=Fal
                 article_date=article_data['date'],
                 article_published=article_data['datePublished'],
                 article_modified=article_data['dateModified'],
-                categories=article_data['category'],
+                categories=', '.join(article_data['category']),
                 keywords=', '.join(article_data['keywords']),
                 url=url,
                 content_html=content_html
