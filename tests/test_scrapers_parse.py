@@ -13,6 +13,7 @@ from scrapers.insidequantumtechnology import (
     iqt_find_content_container,
     iqt_parse_sitemap_xml,
 )
+from scrapers.quantamagazine import qm_extract_metadata, qm_is_relevant
 from scrapers.quantumzeitgeist import qz_extract_metadata, qz_is_relevant
 from scrapers.thequantuminsider import tqi_extract_metadata
 
@@ -234,3 +235,59 @@ def test_tqi_keywords_string_is_not_split_into_characters():
     metadata = tqi_extract_metadata(_soup([(None, json.dumps(doc))]))
 
     assert metadata["keywords"] == ["alpha", "beta"]
+
+
+def _find_ga4_script(soup: BeautifulSoup):
+    return next(s for s in soup.find_all("script") if "ga4Array" in s.text)
+
+
+def _find_graph_script(soup: BeautifulSoup):
+    return next(s for s in soup.find_all("script") if "@graph" in s.text)
+
+
+def test_qm_metadata_reads_graph_and_ga4():
+    metadata = qm_extract_metadata(_load("qm_article.html"))
+
+    assert metadata["title"] == "In Hilbert Space, All Things Are Quantumly Possible"
+    assert metadata["author"] == "Charlie Wood"
+    assert metadata["date"] == "2026-08-26"
+    assert metadata["datePublished"].startswith("2026-08-26T14:30:35")
+    assert metadata["dateModified"].startswith("2026-08-26T17:56:55")
+    assert metadata["category"] == ["Physics"]
+    assert metadata["kicker"] == "quantum physics"
+    assert metadata["keywords"] == [
+        "explainers",
+        "history of science",
+        "physics",
+        "quantum physics",
+    ]
+
+
+def test_qm_extract_metadata_returns_none_without_graph_script():
+    soup = _load("qm_article.html")
+    _find_graph_script(soup).extract()
+
+    assert qm_extract_metadata(soup) is None
+
+
+def test_qm_extract_metadata_returns_none_without_ga4_script():
+    soup = _load("qm_article.html")
+    _find_ga4_script(soup).extract()
+
+    assert qm_extract_metadata(soup) is None
+
+
+def test_qm_relevance_filter_still_rejects_non_quantum_kicker():
+    assert qm_is_relevant({"kicker": "quantum physics"}) is True
+    assert qm_is_relevant({"kicker": "biology"}) is False
+    assert qm_is_relevant({}) is False
+
+
+def test_qm_keywords_empty_when_sidebar_tags_missing():
+    soup = _load("qm_article.html")
+    for tag_wrap in soup.find_all("div", class_="sidebar__tag-wrap"):
+        tag_wrap.extract()
+
+    metadata = qm_extract_metadata(soup)
+
+    assert metadata["keywords"] == []

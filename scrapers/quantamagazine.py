@@ -14,8 +14,101 @@ from core.utils import (
     logger, generate_content_text, generate_content_json,
     remove_dupes, sortbydate, is_after_min_date
 )
+from json_repair import repair_json
 
 #################
+
+def _qm_load_json(text):
+    """
+    Parse a script payload, repairing truncated JSON when needed.
+
+    Args:
+        text (str): Raw script contents.
+
+    Returns:
+        dict | list | None: Parsed value, or None when nothing parses.
+    """
+    for payload in (text, repair_json(text)):
+        try:
+            return json.loads(payload)
+        except Exception:
+            continue
+
+    logger.warning("Failed to parse script payload")
+    return None
+
+
+def qm_extract_metadata(soup):
+    """
+    Extract normalized metadata for a Quanta Magazine article page.
+
+    The page needs two independent sources: the JSON-LD @graph holding the
+    WebPage node and the inline ga4Array holding kicker and category. Both
+    used to be read into bare names, which left them undefined (and raised)
+    whenever the portal dropped or renamed either script.
+
+    Args:
+        soup (BeautifulSoup): Parsed article page.
+
+    Returns:
+        dict | None: Metadata, or None when either source is missing.
+    """
+    graph = None
+    ga4 = None
+
+    for script_data in soup.find_all('script'):
+        if graph is None and '@graph' in script_data.text:
+            graph = _qm_load_json(script_data.text)
+        if ga4 is None and 'ga4Array' in script_data.text:
+            ga4 = _qm_load_json(script_data.text[25:-7])
+
+    if not isinstance(graph, dict) or not isinstance(ga4, dict):
+        return None
+
+    nodes = graph.get('@graph')
+    if not isinstance(nodes, list) or len(nodes) < 2 or not isinstance(nodes[1], dict):
+        return None
+
+    node = nodes[1]
+    author = node.get('author') if isinstance(node.get('author'), dict) else {}
+    name = node.get('name') if isinstance(node.get('name'), str) else ''
+    published = parse_article_date(node['datePublished']) if node.get('datePublished') else (None, None)
+    modified = parse_article_date(node['dateModified']) if node.get('dateModified') else (None, None)
+
+    title = name[:-len(' | Quanta Magazine')] if name.endswith(' | Quanta Magazine') else name
+
+    metadata = {
+        'title': title,
+        'author': author.get('name', ''),
+        'date': published[0] or '',
+        'datePublished': published[1] or '',
+        'dateModified': modified[1] or '',
+        'category': ga4.get('category') or [],
+        'kicker': ga4.get('kicker'),
+        'keywords': [],
+    }
+
+    tag_wrap = soup.find('div', class_='sidebar__tag-wrap')
+    if tag_wrap:
+        metadata['keywords'] = [
+            span.text for span in tag_wrap.find_all('span', class_='theme__text')
+        ]
+
+    return metadata
+
+
+def qm_is_relevant(metadata):
+    """
+    Keep articles whose Quanta kicker is about quantum topics.
+
+    Args:
+        metadata (dict): Metadata returned by qm_extract_metadata.
+
+    Returns:
+        bool: True when the article belongs in this newsletter.
+    """
+    kicker = (metadata or {}).get('kicker')
+    return bool(kicker) and 'quantum' in kicker.split(' ')
 
 def qm_scrape_sitemap(list_sitemap, ignore_cache, driver, debug=False):
     """
@@ -134,31 +227,17 @@ def qm_generate_article_html(url, articles_dict, ignore_cache, driver, debug=Fal
         article_data['category'] = []  
         article_data['keywords'] = []        
 
-        for script_data in soup.find_all('script'):
-        
-            if '@graph' in script_data.text:
-                metadata = script_data.text
-                metadata = json.loads(metadata)
-            
-            if 'ga4Array' in script_data.text:
-                metadata_2 = script_data.text[25:-7]
-                metadata_2 = json.loads(metadata_2)
-        
-        if metadata_2['kicker'] == None or 'quantum' not in metadata_2['kicker'].split(' '):
+        metadata = qm_extract_metadata(soup)
+
+        if metadata is None:
+            logger.warning(f"No metadata found within article for {url}")
+            return None
+
+        if not qm_is_relevant(metadata):
             logger.warning(f"Category invalid found within article for {url}")
             return None
-            
-        article_data['category'] = metadata_2['category']
 
-        article_data['title'] = metadata['@graph'][1]['name'][0:-18] if 'name' in metadata['@graph'][1] else ''           
-        article_data['author'] = metadata['@graph'][1]['author']['name'] if 'author' in metadata['@graph'][1] else '' 
-        article_data['date'] = parse_article_date(metadata['@graph'][1]['datePublished'])[0] if 'datePublished' in metadata['@graph'][1] else '' 
-        article_data['datePublished'] = parse_article_date(metadata['@graph'][1]['datePublished'])[1] if 'datePublished' in metadata['@graph'][1] else ''  
-        article_data['dateModified'] = parse_article_date(metadata['@graph'][1]['dateModified'])[1] if 'dateModified' in metadata['@graph'][1] else ''  
-
-        for entry in soup.find('div', class_='sidebar__tag-wrap').find_all('span', class_='theme__text'):
-            
-            article_data['keywords'].append(entry.text)
+        article_data.update(metadata)
   
         content_html = []
         
