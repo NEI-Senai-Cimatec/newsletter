@@ -7,6 +7,11 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
+from scrapers.insidequantumtechnology import (
+    iqt_extract_metadata,
+    iqt_find_content_container,
+    iqt_parse_sitemap_xml,
+)
 from scrapers.quantumzeitgeist import qz_extract_metadata, qz_is_relevant
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -75,3 +80,70 @@ def test_qz_relevance_is_case_insensitive():
     )
 
     assert qz_is_relevant(metadata) is True
+
+
+def test_iqt_sitemap_keeps_full_url_and_parses_cdata_date():
+    entries = iqt_parse_sitemap_xml(
+        (FIXTURES / "iqt_sitemap.xml").read_text(encoding="utf-8")
+    )
+
+    assert [entry["url"] for entry in entries] == [
+        "https://www.insidequantumtechnology.com/news-archive/iqt-sunday-edition-5/",
+        "https://www.insidequantumtechnology.com/news-archive/only-one-month-to-go/",
+    ]
+    assert entries[0]["date"] == "2026-09-27 11:00 +0000"
+
+
+def test_iqt_sitemap_skips_entries_with_unparseable_dates():
+    xml = (
+        '<?xml version="1.0"?><urlset>'
+        '<url><loc><![CDATA[https://www.insidequantumtechnology.com/good/]]></loc>'
+        "<lastmod><![CDATA[2026-09-27T11:00:43+00:00]]></lastmod></url>"
+        '<url><loc><![CDATA[https://www.insidequantumtechnology.com/bad/]]></loc>'
+        "<lastmod><![CDATA[not-a-date]]></lastmod></url>"
+        '<url><loc><![CDATA[https://www.insidequantumtechnology.com/no-date/]]></loc>'
+        "</url></urlset>"
+    )
+
+    entries = iqt_parse_sitemap_xml(xml)
+
+    assert [entry["url"] for entry in entries] == [
+        "https://www.insidequantumtechnology.com/good/"
+    ]
+
+
+def test_iqt_metadata_from_aioseo_graph():
+    metadata = iqt_extract_metadata(_load("iqt_article.html"))
+
+    assert metadata["title"] == "IQT Sunday Edition - Inside Quantum Technology"
+    assert metadata["author"] == "Brian Siegelwax"
+    assert metadata["date"] == "2026-09-27"
+    assert metadata["datePublished"].startswith("2026-09-27T07:00:43")
+    assert metadata["category"] == []
+
+
+def test_iqt_content_container_found_when_entry_content_absent():
+    container = iqt_find_content_container(_load("iqt_article.html"))
+
+    assert container is not None
+    assert "single_post_article" in (container.get("class") or [])
+    paragraphs = [paragraph.get_text(strip=True) for paragraph in container.find_all("p")]
+    assert any(len(paragraph) > 100 for paragraph in paragraphs)
+
+
+def test_iqt_keywords_missing_tags_section_does_not_raise():
+    metadata = iqt_extract_metadata(_load("iqt_article.html"))
+
+    assert metadata["keywords"] == []
+
+
+def test_iqt_metadata_falls_back_to_meta_tags():
+    soup = _load("iqt_article.html")
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        script.decompose()
+
+    metadata = iqt_extract_metadata(soup)
+
+    assert metadata["title"] == "IQT Sunday Edition - Inside Quantum Technology"
+    assert metadata["author"] == "Brian Siegelwax"
+    assert metadata["datePublished"].startswith("2026-09-27T11:00:43")
