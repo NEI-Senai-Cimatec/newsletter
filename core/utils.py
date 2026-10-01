@@ -301,6 +301,9 @@ def get_cached_page(url, ignore_cache=False, driver=None, type_='article'):
         response = scraper.get(url, timeout=30)
         response.raise_for_status()
         page_source = response.text
+
+        if CLOUDFLARE_STRING in page_source:
+            raise RuntimeError(f"Cloudflare challenge returned for {url}")
         
         # Save to cache
         with open(cache_path, 'w', encoding='utf-8') as f:

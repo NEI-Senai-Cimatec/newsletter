@@ -221,6 +221,32 @@ def test_get_cached_page_does_not_cache_cloudflare_challenge(
     assert not (cache_dirs.parent / "cache.json").exists()
 
 
+class _FakeResponse:
+    """Stands in for a cloudscraper response that returned a challenge."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+def test_get_cached_page_rejects_cloudscraper_challenge_response(
+    cache_dirs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    challenge = "<html><div id='challenge-error-text'>Just a moment...</div></html>"
+    monkeypatch.setattr(cu.scraper, "get", lambda *a, **k: _FakeResponse(challenge))
+    driver = _FakeDriver("<html>rendered</html>")
+    url = "https://www.insidequantumtechnology.com/news-archive/cf-200/"
+
+    source = cu.get_cached_page(url, ignore_cache=True, driver=driver)
+
+    assert source == "<html>rendered</html>"
+    assert _cache_path(cache_dirs, url, "article").read_text(encoding="utf-8") == (
+        "<html>rendered</html>"
+    )
+
+
 def test_get_cached_page_without_driver_raises(cache_dirs: Path) -> None:
     with pytest.raises(RuntimeError, match="example.com"):
         cu.get_cached_page(
