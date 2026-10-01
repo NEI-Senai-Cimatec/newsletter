@@ -52,6 +52,9 @@ class ScraperFrame(ctk.CTkFrame):
         self.min_date_entry = ctk.CTkEntry(date_row, width=150,
                                            placeholder_text="AAAA-MM-DD (vazio = tudo)")
         self.min_date_entry.pack(side="left", padx=8)
+        self.filter_by_sitemap_date_var = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(opt_body, text="Filtrar por data do sitemap (antes de baixar)",
+                        variable=self.filter_by_sitemap_date_var).pack(anchor="w", padx=12, pady=4)
 
         # ---- Progress ----
         _prog_outer, prog_body = self._build_section("Progresso")
@@ -123,6 +126,7 @@ class ScraperFrame(ctk.CTkFrame):
         self.debug_var.set(bool(config.get("scraper_settings", {}).get("debug")))
         self.min_date_entry.delete(0, "end")
         self.min_date_entry.insert(0, config.get("scraper_settings", {}).get("min_date", ""))
+        self.filter_by_sitemap_date_var.set(bool(config.get("scraper_settings", {}).get("filter_by_sitemap_date")))
         self._run_preflight()
         if not self._polling:
             self._polling = True
@@ -176,6 +180,7 @@ class ScraperFrame(ctk.CTkFrame):
         config["scraper_settings"]["ignore_cache"] = bool(self.ignore_cache_var.get())
         config["scraper_settings"]["debug"] = bool(self.debug_var.get())
         config["scraper_settings"]["min_date"] = self.min_date_entry.get().strip()
+        config["scraper_settings"]["filter_by_sitemap_date"] = bool(self.filter_by_sitemap_date_var.get())
         self.app.save_config()
 
         api_key = self.app.config_manager.get_api_key(config.get("provider", "groq"))

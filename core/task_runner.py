@@ -145,6 +145,7 @@ class TaskRunner:
         ignore_cache = scraper_settings.get("ignore_cache", False)
         debug = scraper_settings.get("debug", False)
         min_date = scraper_settings.get("min_date", "")
+        filter_by_sitemap_date = scraper_settings.get("filter_by_sitemap_date", False)
         language = config.get("language", "en")
 
         self._emit("init", "Preparando diretórios e carregando base existente...")
@@ -174,6 +175,7 @@ class TaskRunner:
                     ignore_cache=ignore_cache,
                     debug=debug,
                     min_date=min_date,
+                    filter_by_sitemap_date=filter_by_sitemap_date,
                     should_cancel=self._cancel_event.is_set,
                 )
             except Exception as e:

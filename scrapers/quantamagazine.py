@@ -233,7 +233,7 @@ def qm_generate_article_html(url, articles_dict, ignore_cache, driver, debug=Fal
         return article_dict
 
 def quantamagazine(model, articles_dict, ignore_cache=False, debug=False,
-                   min_date=None, should_cancel=None):
+                   min_date=None, filter_by_sitemap_date=False, should_cancel=None):
     
     driver = initialize_driver()
     
@@ -244,7 +244,10 @@ def quantamagazine(model, articles_dict, ignore_cache=False, debug=False,
         ]         
         
         url_list = qm_scrape_sitemap(list_sitemap, ignore_cache, driver, debug)
-        
+
+        if filter_by_sitemap_date and min_date:
+            url_list = [item for item in url_list if is_after_min_date(item['date'], min_date)]
+
         number_urls = len(url_list)
         
         logger.info(f"Number of urls identified: {number_urls}")

@@ -106,6 +106,7 @@ class ConfigManager:
             "ignore_cache": False,
             "debug": False,
             "min_date": "",
+            "filter_by_sitemap_date": False,
         },
         "language": "en",
         "newsletter": {
