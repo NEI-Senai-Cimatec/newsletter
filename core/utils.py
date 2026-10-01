@@ -18,6 +18,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
+from json_repair import repair_json
 from core.api_client import APIError
 
 # Logging setup
@@ -520,6 +521,358 @@ def parse_article_date(date_str):
     except Exception as e:
         logger.warning(f"Failed to parse date '{date_str}': {e}")
         return None, None
+
+def _parse_jsonld_text(text):
+    """
+    Parse a single JSON-LD payload, repairing it when necessary.
+
+    Args:
+        text (str): Raw text of a JSON-LD script tag.
+
+    Returns:
+        dict | list | None: The parsed document, or None when unsalvageable.
+    """
+    text = (text or '').strip()
+
+    if not text:
+        return None
+
+    try:
+        return json.loads(text)
+    except Exception:
+        try:
+            return json.loads(repair_json(text))
+        except Exception as e:
+            logger.warning(f"Unparseable JSON-LD payload skipped: {e}")
+            return None
+
+def _script_text(script):
+    """
+    Read the raw text of a script tag.
+
+    Args:
+        script (Tag): Script element.
+
+    Returns:
+        str: Its text content ('' when empty).
+    """
+    text = script.string if script.string is not None else script.get_text()
+    return text or ''
+
+def _nodes_from_document(document):
+    """
+    Normalize a parsed JSON-LD document into a flat list of nodes.
+
+    Args:
+        document (dict | list | None): Parsed document.
+
+    Returns:
+        list: Dict nodes, with any '@graph' expanded.
+    """
+    if isinstance(document, list):
+        return [item for item in document if isinstance(item, dict)]
+
+    if not isinstance(document, dict):
+        return []
+
+    graph = document.get('@graph')
+
+    if isinstance(graph, list):
+        return [node for node in graph if isinstance(node, dict)]
+
+    return [document]
+
+def iter_ld_json(soup):
+    """
+    Yield every parsed JSON-LD document found on a page.
+
+    Args:
+        soup (BeautifulSoup): Parsed page.
+
+    Yields:
+        dict: One document per application/ld+json script tag.
+    """
+    for script in soup.find_all('script'):
+        if (script.get('type') or '').strip().lower() != 'application/ld+json':
+            continue
+
+        document = _parse_jsonld_text(_script_text(script))
+
+        if document is None:
+            continue
+
+        if isinstance(document, list):
+            for item in document:
+                if isinstance(item, dict):
+                    yield item
+        else:
+            yield document
+
+def collect_ld_nodes(soup):
+    """
+    Flatten every JSON-LD document on a page into one list of nodes.
+
+    Args:
+        soup (BeautifulSoup): Parsed page.
+
+    Returns:
+        list: Dict nodes, with each document's '@graph' expanded.
+    """
+    nodes = []
+
+    for document in iter_ld_json(soup):
+        nodes.extend(_nodes_from_document(document))
+
+    return nodes
+
+def ld_type_matches(node, type_name):
+    """
+    Check whether a JSON-LD node declares a given @type.
+
+    Args:
+        node (dict): JSON-LD node.
+        type_name (str): Type to look for.
+
+    Returns:
+        bool: True when the node matches.
+    """
+    if not isinstance(node, dict):
+        return False
+
+    node_type = node.get('@type')
+
+    if isinstance(node_type, (list, tuple)):
+        return type_name in node_type
+
+    return node_type == type_name
+
+def find_ld_node(nodes, *types):
+    """
+    Find the first JSON-LD node matching one of the requested types.
+
+    Args:
+        nodes (list): Candidate JSON-LD nodes.
+        *types (str): Types to accept, in priority order.
+
+    Returns:
+        dict | None: The first matching node, or None.
+    """
+    for type_name in types:
+        for node in nodes:
+            if ld_type_matches(node, type_name):
+                return node
+
+    return None
+
+# Types accepted as "the article node", in priority order. Sites rotate their
+# graph order, so callers must never index the graph by position.
+LD_ARTICLE_TYPES = ('NewsArticle', 'Article', 'BlogPosting',
+                    'ScholarlyArticle', 'TechArticle', 'WebPage')
+
+def _author_name(author):
+    """
+    Normalize a JSON-LD author value into a plain name.
+
+    Args:
+        author: dict, list of dicts/strings, string, or missing.
+
+    Returns:
+        str: The author name ('' when unavailable).
+    """
+    if isinstance(author, dict):
+        return str(author.get('name') or '').strip()
+
+    if isinstance(author, list):
+        for item in author:
+            if isinstance(item, dict) and item.get('name'):
+                return str(item['name']).strip()
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+        return ''
+
+    if isinstance(author, str):
+        return author.strip()
+
+    return ''
+
+def _category_list(value):
+    """
+    Normalize articleSection into a list of category labels.
+
+    A plain string stays a single label: portals use it as one display
+    string, not as a comma-separated list.
+
+    Args:
+        value: str, list, or missing.
+
+    Returns:
+        list: Category labels.
+    """
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    return []
+
+def _keyword_list(value):
+    """
+    Normalize keywords into a list of individual keywords.
+
+    Args:
+        value: str, list, or missing.
+
+    Returns:
+        list: Keywords.
+    """
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(',') if part.strip()]
+
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    return []
+
+def _parse_dates(value):
+    """
+    Turn an article date string into the (date, timestamp) pair.
+
+    Args:
+        value: Raw date string.
+
+    Returns:
+        tuple: ('YYYY-MM-DD', iso_timestamp), both '' when unparseable.
+    """
+    if not value:
+        return '', ''
+
+    formatted_date, iso_timestamp = parse_article_date(str(value))
+    return formatted_date or '', iso_timestamp or ''
+
+def _meta_content(soup, attribute, value):
+    """
+    Read the content of a <meta> tag.
+
+    Args:
+        soup (BeautifulSoup): Parsed page.
+        attribute (str): Attribute holding the meta key ('property', 'name').
+        value (str): Meta key value.
+
+    Returns:
+        str: Content ('' when the tag is absent).
+    """
+    tag = soup.find('meta', attrs={attribute: value})
+    return (tag.get('content') or '').strip() if tag else ''
+
+def _has_article_meta(soup):
+    """
+    Check whether a page carries any article <meta> tag.
+
+    Args:
+        soup (BeautifulSoup): Parsed page.
+
+    Returns:
+        bool: True when at least one useful meta tag is present.
+    """
+    for attribute, value in (('property', 'og:title'),
+                             ('property', 'article:published_time'),
+                             ('property', 'article:modified_time'),
+                             ('name', 'author')):
+        if _meta_content(soup, attribute, value):
+            return True
+
+    return False
+
+def _apply_ld_node(metadata, node):
+    """
+    Fill *metadata* from a JSON-LD article node.
+
+    Args:
+        metadata (dict): Metadata dictionary to mutate.
+        node (dict): JSON-LD node.
+    """
+    title = node.get('headline') or node.get('name') or ''
+    metadata['title'] = str(title).strip()
+    metadata['author'] = _author_name(node.get('author'))
+
+    published = node.get('datePublished') or ''
+    metadata['date'], metadata['datePublished'] = _parse_dates(published)
+    _, metadata['dateModified'] = _parse_dates(node.get('dateModified') or published)
+
+    metadata['category'] = _category_list(node.get('articleSection'))
+    metadata['keywords'] = _keyword_list(node.get('keywords'))
+
+def _apply_meta_tags(metadata, soup):
+    """
+    Fill any field still empty in *metadata* from <meta> tags.
+
+    Args:
+        metadata (dict): Metadata dictionary to mutate.
+        soup (BeautifulSoup): Parsed page.
+    """
+    if not metadata['title']:
+        metadata['title'] = _meta_content(soup, 'property', 'og:title')
+
+    if not metadata['author']:
+        metadata['author'] = _meta_content(soup, 'name', 'author')
+
+    if not metadata['datePublished']:
+        metadata['date'], metadata['datePublished'] = _parse_dates(
+            _meta_content(soup, 'property', 'article:published_time'))
+
+    if not metadata['dateModified']:
+        modified = _meta_content(soup, 'property', 'article:modified_time')
+        _, metadata['dateModified'] = _parse_dates(modified or metadata['datePublished'])
+
+def extract_article_metadata(soup, script_class=None):
+    """
+    Extract normalized article metadata from a page.
+
+    JSON-LD is located by @type rather than by graph position, and any field
+    the schema does not carry falls back to the page's <meta> tags.
+
+    Args:
+        soup (BeautifulSoup): Parsed article page.
+        script_class (str | None): Class of the script tag holding the
+            portal's preferred schema, when there is one.
+
+    Returns:
+        dict | None: title, author, date, datePublished, dateModified,
+        category and keywords; None when the page declares no metadata.
+    """
+    node = None
+
+    if script_class:
+        script = soup.find('script', class_=script_class)
+
+        if script is not None:
+            node = find_ld_node(
+                _nodes_from_document(_parse_jsonld_text(_script_text(script))),
+                *LD_ARTICLE_TYPES)
+
+    if node is None:
+        node = find_ld_node(collect_ld_nodes(soup), *LD_ARTICLE_TYPES)
+
+    if node is None and not _has_article_meta(soup):
+        return None
+
+    metadata = {
+        'title': '',
+        'author': '',
+        'date': '',
+        'datePublished': '',
+        'dateModified': '',
+        'category': [],
+        'keywords': [],
+    }
+
+    if node is not None:
+        _apply_ld_node(metadata, node)
+
+    _apply_meta_tags(metadata, soup)
+
+    return metadata
 
 def sanitize_content(content):
     """
