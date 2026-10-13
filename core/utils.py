@@ -19,18 +19,21 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from json_repair import repair_json
+from core import paths
 from core.api_client import APIError
 
 # Logging setup
 logger = logging.getLogger(__name__)
 
-# Application root: absolute anchor so the pipeline works regardless of the
-# current working directory (GUI, CLI, or tests). All data stays inside the
-# app folder or the user profile — no admin rights required.
-APP_ROOT = Path(__file__).resolve().parent.parent
+# APP_ROOT anchors writable data. In a frozen (PyInstaller) build it follows
+# core/paths.py: next to the exe when writable, else ~/.newsletter_tool/data;
+# in dev it stays the repository root (justification for touching this file,
+# README §11: portable distribution).
+APP_ROOT = paths.data_root()
 
 # Directories and constants
-TEMPLATE_DIR = str(APP_ROOT / "template")
+# Templates/prompts are read-only bundled resources: sys._MEIPASS when frozen.
+TEMPLATE_DIR = str(paths.resource_root() / "template")
 CACHE_DIR = str(APP_ROOT / "cache")
 LEGACY_CACHE_DIR = str(APP_ROOT / "cache" / "legacy")
 ARTICLE_DIR = str(APP_ROOT / "article")

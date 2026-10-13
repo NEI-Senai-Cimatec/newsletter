@@ -19,12 +19,14 @@ import logging
 import re
 from pathlib import Path
 
+from core import paths
+
 logger = logging.getLogger(__name__)
 
 BRIEF_MAX_CHARS = 700
 BRIEF_MAX_WORDS = 100
 
-BRIEF_PROMPT_FILE = Path(__file__).resolve().parent.parent / "template" / "brief_ptbr.txt"
+BRIEF_PROMPT_FILE = paths.resource_root() / "template" / "brief_ptbr.txt"
 RETRY_SUFFIX = ("\n\nResponda em no máximo 700 caracteres e 100 palavras, "
                 "em um único parágrafo, sem quebras de linha.")
 

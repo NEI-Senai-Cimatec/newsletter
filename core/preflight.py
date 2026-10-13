@@ -15,6 +15,7 @@ import socket
 from pathlib import Path
 from typing import Any, Callable
 
+from core import paths
 from core.api_client import APIClient, APIError
 
 logger = logging.getLogger(__name__)
@@ -144,8 +145,9 @@ def run_preflight_checks(
     template_dir: Path | str | None = None,
 ) -> list[dict]:
     """Run every check and return the ordered list of results."""
-    root = Path(base_dir) if base_dir is not None else Path(__file__).resolve().parent.parent
-    templates = Path(template_dir) if template_dir is not None else root / "template"
+    root = Path(base_dir) if base_dir is not None else paths.data_root()
+    templates = (Path(template_dir) if template_dir is not None
+                 else paths.resource_root() / "template")
     min_date = config.get("scraper_settings", {}).get("min_date", "") if isinstance(config, dict) else ""
     steps: list[tuple[str, Callable, tuple]] = [
         ("Chrome Browser", check_chrome, ()),

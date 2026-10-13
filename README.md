@@ -75,6 +75,18 @@ pip install -r requirements-dev.txt
 
 Dependências de execução: `selenium`, `webdriver-manager`, `cloudscraper`, `beautifulsoup4`, `lxml`, `customtkinter`, `openai`, `keyring`, `json-repair`, `python-dateutil`, `matplotlib`, `reportlab`, `python-docx`. Dev: `pytest`, `coverage`.
 
+### Executável portátil (Windows, sem Python no alvo)
+
+```
+powershell -ExecutionPolicy Bypass -File packaging\build_portable.ps1
+```
+
+Gera `dist\QuIIN\` (pasta portátil com `QuIIN.exe`) e `dist\QuIIN-Portable-<AAAA-MM-DD>.zip`; o script instala o PyInstaller no `.venv`, compila (PyInstaller onedir), roda um smoke test que confirma que o exe abre e compacta o resultado. Basta extrair o zip e dar duplo clique em `QuIIN.exe` — não exige instalar Python nem permissão de administrador.
+
+- Na primeira execução o app cria `cache\`, `article\`, `content\`, `parse\`, os JSONs e `console.txt` **ao lado do exe**; se a pasta não for gravável, usa `~/.newsletter_tool/data/` (a tela Execução mostra o caminho no pré-voo). A variável de ambiente `QUIIN_DATA_DIR` força um local específico.
+- O pipeline continua exigindo **Google Chrome instalado + internet** (o driver é baixado na 1ª execução para `~/.wdm`); a tela Execução avisa o que falta.
+- Config, usuários, pesos e auditoria permanecem em `~/.newsletter_tool/`.
+
 ## 5. Primeiro uso
 
 ```
@@ -163,7 +175,7 @@ Exportações rodam em threads dedicadas (a interface não congela), com progres
 .venv\Scripts\python -m pytest tests -q
 ```
 
-→ `157 passed`. Cobertura do gate RNF-07 (novos módulos `core/` ≥ 80%):
+→ `203 passed`. Cobertura do gate RNF-07 (novos módulos `core/` ≥ 80%):
 
 ```
 .venv\Scripts\python -m coverage run -m pytest tests -q
@@ -182,7 +194,7 @@ Exportações rodam em threads dedicadas (a interface não congela), com progres
 - Sem chave de API configurada (ou com falha), os briefs da newsletter usam o fallback extrativo no idioma original do documento — pt-BR "quando possível" (RF-N2); o export nunca falha por causa da API.
 - Roadmap: rodar o pipeline para adensar a base; novos portais via `scrapers/`; evoluções de newsletter (templates em `template/`); manter `core/utils.py`/`task_runner.py` intocados sem justificativa escrita.
 
-Especificação e plano: `docs/superpowers/specs/2026-09-14-quiin-design.md`, `docs/superpowers/plans/2026-09-14-quiin-implementation.md`.
+Especificação e plano: `docs/superpowers/specs/2026-09-14-quiin-design.md`, `docs/superpowers/plans/2026-09-14-quiin-implementation.md`; empacotamento portátil: `docs/superpowers/specs/2026-10-13-quiin-portable-design.md`, `docs/superpowers/plans/2026-10-13-quiin-portable-implementation.md`.
 
 ## 12. Changelog (fase QuIIN)
 
