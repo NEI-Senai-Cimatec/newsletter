@@ -32,17 +32,36 @@ def data_root() -> Path:
     """Root for writable runtime data.
 
     Precedence: writable ``QUIIN_DATA_DIR`` -> frozen: writable folder of the
-    executable, else ``~/.newsletter_tool/data`` -> dev: repository root.
+    executable (on macOS, the folder that CONTAINS the ``.app`` bundle, so
+    data travels with the app instead of living inside it), else
+    ``~/.newsletter_tool/data`` -> dev: repository root.
     """
     override = os.environ.get("QUIIN_DATA_DIR", "").strip()
     if override and _is_writable(Path(override)):
         return Path(override)
     if is_frozen():
-        exe_dir = Path(sys.executable).resolve().parent
-        if _is_writable(exe_dir):
-            return exe_dir
+        exe = Path(sys.executable).resolve()
+        candidate = exe.parent
+        if sys.platform == "darwin":
+            container = _mac_app_container(exe)
+            if container is not None:
+                candidate = container
+        if _is_writable(candidate):
+            return candidate
         return Path.home() / ".newsletter_tool" / "data"
     return _REPO_ROOT
+
+
+def _mac_app_container(exe: Path) -> Path | None:
+    """Return the folder holding ``<X>.app`` for an executable inside it."""
+    parts = exe.parts
+    for index, part in enumerate(parts):
+        if part.endswith(".app"):
+            if (index + 2 < len(parts) and parts[index + 1] == "Contents"
+                    and parts[index + 2] == "MacOS"):
+                return Path(*parts[:index])
+            return None
+    return None
 
 
 def _is_writable(directory: Path) -> bool:

@@ -73,3 +73,47 @@ def test_consumers_use_paths_module():
     assert cu.APP_ROOT == paths.data_root()
     assert cu.TEMPLATE_DIR == str(paths.resource_root() / "template")
     assert briefs.BRIEF_PROMPT_FILE == paths.resource_root() / "template" / "brief_ptbr.txt"
+
+
+def test_mac_bundle_container_detected(tmp_path):
+    exe = tmp_path / "portable" / "QuIIN.app" / "Contents" / "MacOS" / "QuIIN"
+    assert paths._mac_app_container(exe) == tmp_path / "portable"
+
+
+def test_mac_non_bundle_returns_none(tmp_path):
+    assert paths._mac_app_container(tmp_path / "bin" / "QuIIN") is None
+
+
+def test_frozen_mac_bundle_uses_container(tmp_path, monkeypatch):
+    monkeypatch.delenv("QUIIN_DATA_DIR", raising=False)
+    app_dir = tmp_path / "portable" / "QuIIN.app" / "Contents" / "MacOS"
+    app_dir.mkdir(parents=True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "executable", str(app_dir / "QuIIN"))
+    assert paths.data_root() == tmp_path / "portable"
+
+
+def test_frozen_mac_non_bundle_uses_exe_dir(tmp_path, monkeypatch):
+    monkeypatch.delenv("QUIIN_DATA_DIR", raising=False)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "executable", str(bin_dir / "QuIIN"))
+    assert paths.data_root() == bin_dir
+
+
+def test_frozen_mac_readonly_container_falls_back_to_profile(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    app_dir = tmp_path / "portable" / "QuIIN.app" / "Contents" / "MacOS"
+    app_dir.mkdir(parents=True)
+    monkeypatch.delenv("QUIIN_DATA_DIR", raising=False)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "executable", str(app_dir / "QuIIN"))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(paths, "_is_writable",
+                        lambda directory: Path(directory) != tmp_path / "portable")
+    assert paths.data_root() == home / ".newsletter_tool" / "data"
