@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
 import shutil
 import socket
 from pathlib import Path
@@ -175,7 +176,11 @@ def run_preflight_checks(
 
 
 def _default_chrome_path() -> Path | None:
-    """Default Chrome install path on Windows; None on other systems."""
+    """Default Chrome install path on macOS/Windows; None elsewhere."""
+    if platform.system() == "Darwin":
+        return Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+    if platform.system() != "Windows":
+        return None
     program_files = os.environ.get("ProgramFiles")
     if not program_files:
         return None

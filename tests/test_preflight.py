@@ -1,6 +1,7 @@
 """Tests for core.preflight (TDD: written before implementation)."""
 import shutil
 import socket
+from pathlib import Path
 
 import pytest
 
@@ -137,3 +138,20 @@ def test_check_provider(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(pf, "APIClient", BadClient)
     assert pf.check_provider({}, "")["status"] == "error"
+
+
+def test_default_chrome_path_macos(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pf.platform, "system", lambda: "Darwin")
+    assert pf._default_chrome_path() == Path(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+
+
+def test_default_chrome_path_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pf.platform, "system", lambda: "Linux")
+    assert pf._default_chrome_path() is None
+
+
+def test_default_chrome_path_windows(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(pf.platform, "system", lambda: "Windows")
+    monkeypatch.setenv("ProgramFiles", str(tmp_path))
+    assert pf._default_chrome_path() == tmp_path / "Google" / "Chrome" / "Application" / "chrome.exe"
