@@ -1,17 +1,19 @@
 # packaging/smoke_test.py
-"""Smoke test for the frozen build (Windows).
+"""Smoke test for the frozen build (Windows, Linux and macOS).
 
-Run 1 (launch): starts ``QuIIN.exe`` from a disjoint working directory with
-``QUIIN_DATA_DIR`` scrubbed from the environment; the app must stay alive,
-write ``console.txt`` next to itself naming the data root (frozen path
-resolution independent of cwd/env) and open its Tk window
-(``FindWindowW`` on the app title).
+Run 1 (launch): starts the built executable from a disjoint working
+directory with ``QUIIN_DATA_DIR`` scrubbed from the environment; the app
+must stay alive and write ``console.txt`` in the expected data root
+(Windows/Linux: next to the executable; macOS: next to ``QuIIN.app``)
+naming that root. On Windows it must also open its window
+(``FindWindowW`` on the app title); on Linux/macOS the run-2 self check
+proves the GUI stack instead.
 
-Run 2 (self check): starts the same exe with ``QUIIN_SMOKE=1``; the banner
-self-check (keyring/reportlab/docx/customtkinter) must exit 0 and append
-``QUIIN SMOKE OK`` to the log.
+Run 2 (self check): starts the same executable with ``QUIIN_SMOKE=1``;
+the banner self-check (keyring/reportlab/docx/real Tk window) must exit 0
+and append ``QUIIN SMOKE OK`` to the log. On headless Linux run the whole
+script under ``xvfb-run``.
 
-Usage: ``python smoke_test.py [APP_DIR]`` (defaults to ``dist/QuIIN``).
 Exit code 0 on success, 1 on failure. Developer/CI helper — not shipped.
 """
 from __future__ import annotations
@@ -25,9 +27,14 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_DIR = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "dist" / "QuIIN"
-EXE = APP_DIR / "QuIIN.exe"
-LOG = APP_DIR / "console.txt"
+_TARGETS = {
+    "win32": (ROOT / "dist" / "QuIIN" / "QuIIN.exe", ROOT / "dist" / "QuIIN"),
+    "darwin": (ROOT / "dist" / "QuIIN.app" / "Contents" / "MacOS" / "QuIIN",
+               ROOT / "dist"),
+}
+EXE, DATA_ROOT = _TARGETS.get(
+    sys.platform, (ROOT / "dist" / "QuIIN" / "QuIIN", ROOT / "dist" / "QuIIN"))
+LOG = DATA_ROOT / "console.txt"
 APP_TITLE = "GLOBAL QUANTUM INTELLIGENCE – QuIIN"
 LAUNCH_TIMEOUT_SECONDS = 180
 SMOKE_TIMEOUT_SECONDS = 60
@@ -47,34 +54,44 @@ def _read_log() -> str:
         return ""
 
 
+def _window_shown() -> bool:
+    if sys.platform != "win32":
+        return True
+    return bool(ctypes.windll.user32.FindWindowW(None, APP_TITLE))
+
+
 def _run_launch(cwd: str) -> int:
     proc = subprocess.Popen([str(EXE)], cwd=cwd, env=_launch_env())
     try:
         marker_deadline = time.time() + LAUNCH_TIMEOUT_SECONDS
         while time.time() < marker_deadline:
             if proc.poll() is not None:
-                print(f"FAIL: QuIIN.exe exited early with code {proc.returncode}")
+                print(f"FAIL: {EXE.name} exited early with code {proc.returncode}")
                 return 1
-            if str(APP_DIR) in _read_log():
+            if str(DATA_ROOT) in _read_log():
                 break
             time.sleep(0.5)
         else:
             print("FAIL: timeout waiting for the data-root log line")
             return 1
 
-        window_deadline = time.time() + WINDOW_TIMEOUT_SECONDS
-        while time.time() < window_deadline:
-            if proc.poll() is not None:
-                print(f"FAIL: QuIIN.exe exited before opening its window (code {proc.returncode})")
+        if sys.platform == "win32":
+            window_deadline = time.time() + WINDOW_TIMEOUT_SECONDS
+            while time.time() < window_deadline:
+                if proc.poll() is not None:
+                    print(f"FAIL: {EXE.name} exited before opening its window (code {proc.returncode})")
+                    return 1
+                if _window_shown():
+                    break
+                time.sleep(0.5)
+            else:
+                print("FAIL: timeout waiting for the QuIIN window title")
                 return 1
-            if ctypes.windll.user32.FindWindowW(None, APP_TITLE):
-                time.sleep(3)
-                if proc.poll() is None:
-                    return 0
-                print(f"FAIL: QuIIN.exe exited right after opening the window (code {proc.returncode})")
-                return 1
-            time.sleep(0.5)
-        print("FAIL: timeout waiting for the QuIIN window title")
+
+        time.sleep(3)
+        if proc.poll() is None:
+            return 0
+        print(f"FAIL: {EXE.name} exited right after startup (code {proc.returncode})")
         return 1
     finally:
         if proc.poll() is None:
@@ -116,7 +133,7 @@ def main() -> int:
         if code == 0:
             code = _run_self_check(cwd)
     if code == 0:
-        print("OK: QuIIN.exe launched (data root next to exe, window shown) and self check passed")
+        print(f"OK: {EXE.name} launched (data root {DATA_ROOT}) and self check passed")
     return code
 
 

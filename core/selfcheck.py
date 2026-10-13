@@ -3,8 +3,9 @@
 
 Proves the packaged app can exercise its riskiest runtime dependencies —
 keyring (OS vault roundtrip), reportlab (PDF), python-docx (DOCX) and the
-bundled customtkinter — without opening the GUI. Raises on any failure;
-``main.py`` logs the traceback and exits non-zero.
+bundled customtkinter (creates and destroys a real window; on headless
+Linux run under ``xvfb-run``). Raises on any failure; ``main.py`` logs the
+traceback and exits non-zero.
 """
 from __future__ import annotations
 
@@ -18,9 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 def run_self_check() -> None:
-    """Exercise frozen keyring/reportlab/docx/customtkinter; raise on failure."""
-    import customtkinter  # noqa: F401  (Tk + bundled assets)
+    """Exercise frozen keyring/reportlab/docx/Tk; raise on failure."""
+    import customtkinter as ctk
     import keyring
+
+    root = ctk.CTk()
+    root.update_idletasks()
+    root.destroy()
 
     keyring.set_password("quiin_smoke", "probe", "value")
     try:
@@ -51,4 +56,4 @@ def run_self_check() -> None:
         if docx_path.stat().st_size == 0:
             raise RuntimeError("python-docx produced an empty document")
 
-    logger.info("QUIIN SMOKE OK: keyring, reportlab, docx, customtkinter")
+    logger.info("QUIIN SMOKE OK: keyring, reportlab, docx, customtkinter window")
