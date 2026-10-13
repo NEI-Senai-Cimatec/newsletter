@@ -29,3 +29,6 @@ venv/
 # Empacotamento portátil (PyInstaller)
 /build/
 /dist/
+
+# Venv do build portátil Linux/macOS
+/.venv-build/

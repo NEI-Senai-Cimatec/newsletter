@@ -1,5 +1,6 @@
 # packaging/quiin.spec
 """PyInstaller onedir build for the portable QuIIN folder."""
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import (
@@ -47,3 +48,11 @@ coll = COLLECT(
     upx=False,
     name="QuIIN",
 )
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="QuIIN.app",
+        icon=None,
+        bundle_identifier="br.org.senai.cimatec.quiin",
+    )

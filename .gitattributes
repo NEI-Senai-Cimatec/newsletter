@@ -1,0 +1,2 @@
+# Scripts de shell precisam de LF em qualquer checkout (bash não tolera CRLF).
+*.sh text eol=lf
