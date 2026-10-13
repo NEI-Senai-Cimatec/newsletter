@@ -87,6 +87,18 @@ Gera `dist\QuIIN\` (pasta portátil com `QuIIN.exe`) e `dist\QuIIN-Portable-<AAA
 - O pipeline continua exigindo **Google Chrome instalado + internet** (o driver é baixado na 1ª execução para `~/.wdm`); a tela Execução avisa o que falta.
 - Config, usuários, pesos e auditoria permanecem em `~/.newsletter_tool/`.
 
+### macOS e Linux (build no GitHub Actions)
+
+Não existe compilação cruzada: os artefatos de macOS/Linux são gerados no CI. Ao publicar uma tag `v*`, o workflow `Portable builds` compila, roda o smoke em cada SO e anexa à release:
+
+- `QuIIN-Portable-Linux-x64.tar.gz` — extraia e rode `QuIIN/QuIIN` (o tar preserva a permissão de execução)
+- `QuIIN-Portable-macOS-arm64.zip` / `QuIIN-Portable-macOS-x86_64.zip` — extraia e abra `QuIIN.app`
+
+Builds manuais: aba **Actions → Portable builds → Run workflow** (ou push na branch) geram os mesmos arquivos como artifacts do workflow. Para build local em Linux/macOS: `bash packaging/build_portable.sh` (Linux roda o smoke via `xvfb-run`).
+
+- **macOS (sem assinatura de código):** o Gatekeeper bloqueia a 1ª abertura — clique com o botão direito → **Abrir** (ou `xattr -cr QuIIN.app`). Os dados ficam na pasta **que contém** o `QuIIN.app` (coloque o app numa pasta só dele); sem permissão de escrita, usa `~/.newsletter_tool/data/`.
+- **Linux:** o pipeline exige Chrome/Chromium instalado (`google-chrome` ou `chromium` no PATH). Sem chaveiro de desktop, a chave de API cai no fallback `~/.newsletter_tool/.credentials` (JSON, só o dono lê).
+
 ## 5. Primeiro uso
 
 ```
@@ -175,7 +187,7 @@ Exportações rodam em threads dedicadas (a interface não congela), com progres
 .venv\Scripts\python -m pytest tests -q
 ```
 
-→ `203 passed`. Cobertura do gate RNF-07 (novos módulos `core/` ≥ 80%):
+→ `211 passed`. Cobertura do gate RNF-07 (novos módulos `core/` ≥ 80%):
 
 ```
 .venv\Scripts\python -m coverage run -m pytest tests -q
@@ -194,7 +206,7 @@ Exportações rodam em threads dedicadas (a interface não congela), com progres
 - Sem chave de API configurada (ou com falha), os briefs da newsletter usam o fallback extrativo no idioma original do documento — pt-BR "quando possível" (RF-N2); o export nunca falha por causa da API.
 - Roadmap: rodar o pipeline para adensar a base; novos portais via `scrapers/`; evoluções de newsletter (templates em `template/`); manter `core/utils.py`/`task_runner.py` intocados sem justificativa escrita.
 
-Especificação e plano: `docs/superpowers/specs/2026-09-14-quiin-design.md`, `docs/superpowers/plans/2026-09-14-quiin-implementation.md`; empacotamento portátil: `docs/superpowers/specs/2026-10-13-quiin-portable-design.md`, `docs/superpowers/plans/2026-10-13-quiin-portable-implementation.md`.
+Especificação e plano: `docs/superpowers/specs/2026-09-14-quiin-design.md`, `docs/superpowers/plans/2026-09-14-quiin-implementation.md`; empacotamento portátil: `docs/superpowers/specs/2026-10-13-quiin-portable-design.md`, `docs/superpowers/plans/2026-10-13-quiin-portable-implementation.md`; macOS/Linux (CI): `docs/superpowers/specs/2026-10-13-quiin-portable-crossplatform-design.md`, `docs/superpowers/plans/2026-10-13-quiin-portable-crossplatform-implementation.md`.
 
 ## 12. Changelog (fase QuIIN)
 
