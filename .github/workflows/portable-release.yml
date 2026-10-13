@@ -19,9 +19,9 @@ jobs:
             artifact: QuIIN-Portable-Windows-x64.zip
           - os: ubuntu-22.04
             artifact: QuIIN-Portable-Linux-x64.tar.gz
-          - os: macos-14
+          - os: macos-15
             artifact: QuIIN-Portable-macOS-arm64.zip
-          - os: macos-13
+          - os: macos-15-intel
             artifact: QuIIN-Portable-macOS-x86_64.zip
     runs-on: ${{ matrix.os }}
     steps:
@@ -37,7 +37,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-venv python3-tk xvfb
+          sudo apt-get install -y python3-venv python3-tk xvfb xauth
+          python3 --version
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
@@ -48,22 +49,37 @@ jobs:
           python packaging/smoke_test.py
           tar.exe -a -c -f "dist/${{ matrix.artifact }}" -C dist QuIIN
 
-      - name: Build (Linux)
+      - name: Create venv (Linux)
         if: runner.os == 'Linux'
         run: |
-          python3 -m venv .venv-build
-          .venv-build/bin/python -m pip install --upgrade pip
-          .venv-build/bin/python -m pip install -r requirements.txt -r requirements-build.txt
-          .venv-build/bin/python -m PyInstaller --clean --noconfirm packaging/quiin.spec
-          xvfb-run -a .venv-build/bin/python packaging/smoke_test.py
-          tar -C dist -czf "dist/${{ matrix.artifact }}" QuIIN
+          python3 -m venv .venv-build 2>&1 | tee /tmp/venv.log || { tail -n 10 /tmp/venv.log | sed 's/^/::error::/'; exit 1; }
+          .venv-build/bin/python -m pip install --upgrade pip 2>&1 | tail -n 3
+
+      - name: Install deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          .venv-build/bin/python -m pip install -r requirements.txt -r requirements-build.txt 2>&1 | tee /tmp/deps.log || { tail -n 10 /tmp/deps.log | sed 's/^/::error::/'; exit 1; }
+
+      - name: PyInstaller (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          .venv-build/bin/python -m PyInstaller --clean --noconfirm packaging/quiin.spec 2>&1 | tee /tmp/build.log || { tail -n 10 /tmp/build.log | sed 's/^/::error::/'; exit 1; }
+
+      - name: Smoke (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a .venv-build/bin/python packaging/smoke_test.py 2>&1 | tee /tmp/smoke.log || { tail -n 10 /tmp/smoke.log | sed 's/^/::error::/'; exit 1; }
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: tar -C dist -czf "dist/${{ matrix.artifact }}" QuIIN
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: |
-          python -m pip install -r requirements.txt -r requirements-build.txt
-          python -m PyInstaller --clean --noconfirm packaging/quiin.spec
-          python packaging/smoke_test.py
+          python -m pip install -r requirements.txt -r requirements-build.txt 2>&1 | tail -n 3
+          python -m PyInstaller --clean --noconfirm packaging/quiin.spec 2>&1 | tee /tmp/build.log || { tail -n 10 /tmp/build.log | sed 's/^/::error::/'; exit 1; }
+          python packaging/smoke_test.py 2>&1 | tee /tmp/smoke.log || { tail -n 10 /tmp/smoke.log | sed 's/^/::error::/'; exit 1; }
           ditto -c -k --keepParent dist/QuIIN.app "dist/${{ matrix.artifact }}"
 
       - name: Upload workflow artifact
